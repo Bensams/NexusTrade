@@ -1,0 +1,298 @@
+"use client";
+
+import { useState, useEffect, use } from "react";
+import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
+import Navbar from "@/components/Navbar";
+
+const GAMES = ["Roblox", "Valorant", "CS2", "Fortnite", "League of Legends", "Apex Legends"];
+const LISTING_TYPES = [
+    { value: "ITEM", label: "Item" },
+    { value: "SERVICE", label: "Service" },
+];
+
+interface Listing {
+    id: string;
+    title: string;
+    description: string;
+    price: number;
+    originalPrice: number | null;
+    type: "ITEM" | "SERVICE";
+    game: string;
+    imageUrl: string | null;
+    sellerId: string;
+}
+
+export default function EditListingPage({ params }: { params: Promise<{ id: string }> }) {
+    const { id } = use(params);
+    const { data: session, status } = useSession();
+    const router = useRouter();
+    const [listing, setListing] = useState<Listing | null>(null);
+    const [isLoading, setIsLoading] = useState(true);
+    const [isSaving, setIsSaving] = useState(false);
+    const [error, setError] = useState("");
+
+    const [formData, setFormData] = useState({
+        title: "",
+        description: "",
+        price: "",
+        type: "ITEM",
+        game: "Roblox",
+        imageUrl: "",
+    });
+
+    useEffect(() => {
+        if (session) {
+            fetchListing();
+        }
+    }, [session, id]);
+
+    const fetchListing = async () => {
+        try {
+            const res = await fetch(`/api/listings/${id}`);
+            if (res.ok) {
+                const data = await res.json();
+                setListing(data);
+                setFormData({
+                    title: data.title,
+                    description: data.description,
+                    price: data.price.toString(),
+                    type: data.type,
+                    game: data.game,
+                    imageUrl: data.imageUrl || "",
+                });
+
+                // Check ownership
+                if (data.sellerId !== session?.user?.id) {
+                    router.push("/listings/my");
+                }
+            } else {
+                router.push("/listings/my");
+            }
+        } catch (error) {
+            console.error("Error fetching listing:", error);
+            router.push("/listings/my");
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setError("");
+        setIsSaving(true);
+
+        try {
+            const res = await fetch(`/api/listings/${id}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(formData),
+            });
+
+            if (res.ok) {
+                router.push("/listings/my");
+            } else {
+                const data = await res.json();
+                setError(data.error || "Failed to update listing");
+            }
+        } catch {
+            setError("Something went wrong");
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    const handleChange = (
+        e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
+    ) => {
+        setFormData({
+            ...formData,
+            [e.target.name]: e.target.value,
+        });
+    };
+
+    // Calculate earnings after 10% fee
+    const price = parseFloat(formData.price) || 0;
+    const earnings = price * 0.9;
+
+    if (status === "loading" || isLoading) {
+        return (
+            <div className="min-h-screen flex items-center justify-center">
+                <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+            </div>
+        );
+    }
+
+    if (!session || !listing) {
+        return null;
+    }
+
+    return (
+        <div className="min-h-screen">
+            <Navbar />
+
+            <div className="pt-24 pb-12 px-4 sm:px-6 lg:px-8">
+                <div className="max-w-2xl mx-auto">
+                    <div className="mb-8">
+                        <Link href="/listings/my" className="text-zinc-400 hover:text-white mb-4 inline-flex items-center gap-2">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                            </svg>
+                            Back to My Listings
+                        </Link>
+                        <h1 className="text-3xl font-bold text-white mb-2">Edit Listing</h1>
+                        <p className="text-zinc-400">Update your listing details</p>
+                    </div>
+
+                    <div className="glass rounded-2xl p-6 sm:p-8">
+                        <form onSubmit={handleSubmit} className="space-y-6">
+                            {error && (
+                                <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm text-center">
+                                    {error}
+                                </div>
+                            )}
+
+                            {/* Title */}
+                            <div>
+                                <label htmlFor="title" className="block text-sm font-medium text-zinc-300 mb-2">
+                                    Title *
+                                </label>
+                                <input
+                                    id="title"
+                                    name="title"
+                                    type="text"
+                                    value={formData.title}
+                                    onChange={handleChange}
+                                    required
+                                    className="w-full px-4 py-3 rounded-xl bg-zinc-900/80 border border-white/10 text-white focus:outline-none focus:border-primary/50"
+                                />
+                            </div>
+
+                            {/* Description */}
+                            <div>
+                                <label htmlFor="description" className="block text-sm font-medium text-zinc-300 mb-2">
+                                    Description *
+                                </label>
+                                <textarea
+                                    id="description"
+                                    name="description"
+                                    value={formData.description}
+                                    onChange={handleChange}
+                                    required
+                                    rows={4}
+                                    className="w-full px-4 py-3 rounded-xl bg-zinc-900/80 border border-white/10 text-white focus:outline-none focus:border-primary/50 resize-none"
+                                />
+                            </div>
+
+                            {/* Price & Type Row */}
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div>
+                                    <label htmlFor="price" className="block text-sm font-medium text-zinc-300 mb-2">
+                                        Price (PHP) *
+                                    </label>
+                                    <div className="relative">
+                                        <span className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400">₱</span>
+                                        <input
+                                            id="price"
+                                            name="price"
+                                            type="number"
+                                            step="0.01"
+                                            min="1"
+                                            value={formData.price}
+                                            onChange={handleChange}
+                                            required
+                                            className="w-full px-4 py-3 pl-8 rounded-xl bg-zinc-900/80 border border-white/10 text-white focus:outline-none focus:border-primary/50"
+                                        />
+                                    </div>
+                                    {price > 0 && (
+                                        <p className="text-xs text-zinc-500 mt-1">
+                                            You&apos;ll receive: <span className="text-primary">₱{earnings.toFixed(2)}</span> (after 10% fee)
+                                        </p>
+                                    )}
+                                    {listing.originalPrice && price < listing.price && (
+                                        <p className="text-xs text-green-400 mt-1">
+                                            🏷️ Price reduced from ₱{listing.price.toFixed(2)}
+                                        </p>
+                                    )}
+                                </div>
+
+                                <div>
+                                    <label htmlFor="type" className="block text-sm font-medium text-zinc-300 mb-2">
+                                        Type *
+                                    </label>
+                                    <select
+                                        id="type"
+                                        name="type"
+                                        value={formData.type}
+                                        onChange={handleChange}
+                                        className="w-full px-4 py-3 rounded-xl bg-zinc-900/80 border border-white/10 text-white focus:outline-none focus:border-primary/50"
+                                    >
+                                        {LISTING_TYPES.map((type) => (
+                                            <option key={type.value} value={type.value}>
+                                                {type.label}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                            </div>
+
+                            {/* Game */}
+                            <div>
+                                <label htmlFor="game" className="block text-sm font-medium text-zinc-300 mb-2">
+                                    Game *
+                                </label>
+                                <select
+                                    id="game"
+                                    name="game"
+                                    value={formData.game}
+                                    onChange={handleChange}
+                                    className="w-full px-4 py-3 rounded-xl bg-zinc-900/80 border border-white/10 text-white focus:outline-none focus:border-primary/50"
+                                >
+                                    {GAMES.map((game) => (
+                                        <option key={game} value={game}>
+                                            {game}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            {/* Image URL */}
+                            <div>
+                                <label htmlFor="imageUrl" className="block text-sm font-medium text-zinc-300 mb-2">
+                                    Image URL (optional)
+                                </label>
+                                <input
+                                    id="imageUrl"
+                                    name="imageUrl"
+                                    type="url"
+                                    value={formData.imageUrl}
+                                    onChange={handleChange}
+                                    placeholder="https://example.com/image.jpg"
+                                    className="w-full px-4 py-3 rounded-xl bg-zinc-900/80 border border-white/10 text-white placeholder-zinc-500 focus:outline-none focus:border-primary/50"
+                                />
+                            </div>
+
+                            {/* Submit Button */}
+                            <div className="flex gap-3">
+                                <button
+                                    type="submit"
+                                    disabled={isSaving}
+                                    className="flex-1 py-3 px-4 rounded-xl font-semibold text-white bg-gradient-to-r from-primary to-accent hover:opacity-90 disabled:opacity-50"
+                                >
+                                    {isSaving ? "Saving..." : "Save Changes"}
+                                </button>
+                                <Link
+                                    href="/listings/my"
+                                    className="px-6 py-3 rounded-xl font-medium text-zinc-300 border border-white/10 hover:bg-white/5"
+                                >
+                                    Cancel
+                                </Link>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+}

@@ -1,0 +1,237 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id              String    @id @default(cuid())
+  name            String?
+  email           String    @unique
+  emailVerified   DateTime?
+  password        String?
+  image           String?
+  bio             String?   // User bio/description
+  balance         Float     @default(0)
+  isSeller        Boolean   @default(false)
+  isAdmin         Boolean   @default(false)
+  fullName        String?   // Legal name for payouts
+  payoutMethod    String?   // "gcash" | "maya"
+  payoutNumber    String?   // Phone number for payouts
+  sellerAgreedAt  DateTime? // When they agreed to 10% fee
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  
+  accounts      Account[]
+  sessions      Session[]
+  listings      Listing[]
+  orders        Order[]
+  withdrawals   Withdrawal[]
+  sentMessages  Message[] @relation("SentMessages")
+  conversations ConversationParticipant[]
+  reviewsGiven  Review[]  @relation("ReviewsGiven")
+  reviewsReceived Review[] @relation("ReviewsReceived")
+  notifications Notification[]
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model Listing {
+  id          String      @id @default(cuid())
+  title         String
+  description   String
+  price         Float
+  originalPrice Float?      // Original price before any reduction
+  type          ListingType
+  game          String
+  imageUrl      String?
+  sellerId      String
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  
+  seller      User        @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  orders      Order[]
+  reviews     Review[]
+  conversations Conversation[]
+}
+
+model Order {
+  id             String      @id @default(cuid())
+  status         OrderStatus @default(PENDING)
+  buyerId        String
+  listingId      String
+  paymentMethod  String?     // "gcash" | "maya"
+  paymentReceipt String?     // Screenshot URL
+  paidAt         DateTime?
+  approvedAt     DateTime?
+  deliveryProof  String?     // Seller's delivery proof screenshot
+  deliveredAt    DateTime?
+  completedAt    DateTime?
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+  
+  buyer     User        @relation(fields: [buyerId], references: [id], onDelete: Cascade)
+  listing   Listing     @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  review    Review?
+  conversations Conversation[]
+}
+
+model Conversation {
+  id           String   @id @default(cuid())
+  listingId    String?
+  orderId      String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  
+  participants ConversationParticipant[]
+  messages     Message[]
+  listing      Listing? @relation(fields: [listingId], references: [id], onDelete: SetNull)
+  order        Order?   @relation(fields: [orderId], references: [id], onDelete: SetNull)
+}
+
+model ConversationParticipant {
+  id             String       @id @default(cuid())
+  userId         String
+  conversationId String
+  lastReadAt     DateTime     @default(now())
+  
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  
+  @@unique([userId, conversationId])
+}
+
+model Message {
+  id             String       @id @default(cuid())
+  content        String
+  senderId       String
+  conversationId String
+  createdAt      DateTime     @default(now())
+  
+  sender         User         @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+}
+
+model Review {
+  id         String   @id @default(cuid())
+  rating     Int
+  comment    String?
+  reviewerId String
+  sellerId   String
+  orderId    String   @unique
+  listingId  String
+  createdAt  DateTime @default(now())
+  
+  reviewer   User     @relation("ReviewsGiven", fields: [reviewerId], references: [id], onDelete: Cascade)
+  seller     User     @relation("ReviewsReceived", fields: [sellerId], references: [id], onDelete: Cascade)
+  order      Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  listing    Listing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
+}
+
+enum ListingType {
+  ITEM
+  SERVICE
+}
+
+enum OrderStatus {
+  PENDING             // Order created, waiting for payment
+  AWAITING_PAYMENT    // User selected payment method
+  PAYMENT_SUBMITTED   // User uploaded receipt
+  PAID                // Admin approved payment, awaiting delivery
+  DELIVERY_SUBMITTED  // Seller uploaded delivery proof
+  COMPLETED           // Admin verified delivery, buyer can review
+  CANCELLED
+  REFUNDED
+}
+
+model Withdrawal {
+  id            String           @id @default(cuid())
+  amount        Float
+  status        WithdrawalStatus @default(PENDING)
+  payoutMethod  String           // "gcash" | "maya"
+  payoutNumber  String
+  payoutName    String
+  processedAt   DateTime?
+  processedBy   String?          // Admin who processed
+  notes         String?          // Admin notes
+  userId        String
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  user          User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+enum WithdrawalStatus {
+  PENDING     // Awaiting admin processing
+  PROCESSING  // Admin is processing
+  COMPLETED   // Payout sent
+  REJECTED    // Rejected by admin
+}
+
+model Notification {
+  id          String           @id @default(cuid())
+  userId      String           // Recipient
+  type        NotificationType
+  title       String
+  message     String
+  isRead      Boolean          @default(false)
+  orderId     String?          // Related order if applicable
+  listingId   String?          // Related listing if applicable
+  createdAt   DateTime         @default(now())
+
+  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+enum NotificationType {
+  // Buyer notifications
+  PAYMENT_APPROVED      // Payment approved by admin
+  PAYMENT_DECLINED      // Payment declined by admin
+  ORDER_DELIVERED       // Seller delivered the item
+  ORDER_COMPLETED       // Order marked complete
+  
+  // Seller notifications
+  NEW_ORDER             // New order received
+  PAYOUT_APPROVED       // Withdrawal approved
+  PAYOUT_REJECTED       // Withdrawal rejected
+  
+  // Admin notifications
+  PAYMENT_TO_REVIEW     // New payment submission
+  DELIVERY_TO_REVIEW    // New delivery submission
+  PAYOUT_REQUEST        // New withdrawal request
+}
