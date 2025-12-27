@@ -115,7 +115,7 @@ export default function SellerProfilePage({ params }: { params: Promise<{ id: st
                 <Navbar />
                 <div className="pt-32 text-center">
                     <h1 className="text-2xl font-bold text-white mb-4">Seller Not Found</h1>
-                    <p className="text-zinc-400 mb-6">The seller you're looking for doesn't exist.</p>
+                    <p className="text-zinc-400 mb-6">The seller you&apos;re looking for doesn&apos;t exist.</p>
                     <Link
                         href="/"
                         className="px-6 py-3 bg-gradient-to-r from-primary to-accent text-white font-medium rounded-xl"
