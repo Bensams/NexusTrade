@@ -48,6 +48,20 @@ interface Withdrawal {
     };
 }
 
+interface CashInRequest {
+    id: string;
+    amount: number;
+    status: string;
+    paymentMethod: string;
+    proofUrl: string | null;
+    createdAt: string;
+    user: {
+        id: string;
+        name: string | null;
+        email: string;
+    };
+}
+
 const STATUS_STYLES: Record<string, string> = {
     PENDING: "bg-zinc-500/20 text-zinc-400",
     AWAITING_PAYMENT: "bg-blue-500/20 text-blue-400",
@@ -66,6 +80,7 @@ export default function AdminDashboard() {
     const router = useRouter();
     const [orders, setOrders] = useState<AdminOrder[]>([]);
     const [withdrawals, setWithdrawals] = useState<Withdrawal[]>([]);
+    const [cashInRequests, setCashInRequests] = useState<CashInRequest[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [selectedReceipt, setSelectedReceipt] = useState<string | null>(null);
     const [processingId, setProcessingId] = useState<string | null>(null);
@@ -75,6 +90,7 @@ export default function AdminDashboard() {
         if (session) {
             fetchOrders();
             fetchWithdrawals();
+            fetchCashInRequests();
         }
     }, [session]);
 
@@ -103,6 +119,18 @@ export default function AdminDashboard() {
             }
         } catch (error) {
             console.error("Error fetching withdrawals:", error);
+        }
+    };
+
+    const fetchCashInRequests = async () => {
+        try {
+            const res = await fetch("/api/admin/cashin");
+            if (res.ok) {
+                const data = await res.json();
+                setCashInRequests(data);
+            }
+        } catch (error) {
+            console.error("Error fetching cash in requests:", error);
         }
     };
 
@@ -155,6 +183,30 @@ export default function AdminDashboard() {
         }
     };
 
+    const handleCashInAction = async (requestId: string, action: "approve" | "reject") => {
+        setProcessingId(requestId);
+        try {
+            const res = await fetch("/api/admin/cashin", {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ id: requestId, action }),
+            });
+
+            if (res.ok) {
+                const newStatus = action === "approve" ? "APPROVED" : "REJECTED";
+                setCashInRequests(
+                    cashInRequests.map((req) =>
+                        req.id === requestId ? { ...req, status: newStatus } : req
+                    )
+                );
+            }
+        } catch (error) {
+            console.error("Error:", error);
+        } finally {
+            setProcessingId(null);
+        }
+    };
+
     const filteredOrders = orders.filter((order) => {
         if (filter === "all") return true;
         if (filter === "payments") return order.status === "PAYMENT_SUBMITTED";
@@ -186,7 +238,7 @@ export default function AdminDashboard() {
                             <p className="text-zinc-400">Manage payments, orders, and withdrawals</p>
                         </div>
                         <div className="flex gap-2 flex-wrap">
-                            {["all", "payments", "delivery", "withdrawals", "completed"].map((f) => (
+                            {["all", "payments", "delivery", "withdrawals", "cashin", "completed"].map((f) => (
                                 <button
                                     key={f}
                                     onClick={() => setFilter(f)}
@@ -195,7 +247,7 @@ export default function AdminDashboard() {
                                         : "bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
                                         }`}
                                 >
-                                    {f === "payments" ? "Payments" : f === "delivery" ? "Delivery" : f.charAt(0).toUpperCase() + f.slice(1)}
+                                    {f === "payments" ? "Payments" : f === "delivery" ? "Delivery" : f === "cashin" ? "Cash In" : f.charAt(0).toUpperCase() + f.slice(1)}
                                 </button>
                             ))}
                         </div>
@@ -226,6 +278,12 @@ export default function AdminDashboard() {
                                 {pendingWithdrawals.length}
                             </div>
                             <div className="text-sm text-zinc-400">Pending Payouts</div>
+                        </div>
+                        <div className="glass rounded-xl p-4 text-center">
+                            <div className="text-2xl font-bold text-blue-400">
+                                {cashInRequests.filter(r => r.status === "PENDING").length}
+                            </div>
+                            <div className="text-sm text-zinc-400">Pending Cash In</div>
                         </div>
                     </div>
 
@@ -292,6 +350,83 @@ export default function AdminDashboard() {
                                                     <span className="text-sm text-green-400">✓ Paid</span>
                                                 )}
                                                 {w.status === "REJECTED" && (
+                                                    <span className="text-sm text-red-400">✗ Rejected</span>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))
+                            )}
+                        </div>
+                    ) : filter === "cashin" ? (
+                        <div className="space-y-4">
+                            <h2 className="text-xl font-semibold text-white mb-4">Cash In Requests</h2>
+                            {cashInRequests.length === 0 ? (
+                                <div className="glass rounded-xl p-12 text-center">
+                                    <p className="text-zinc-400">No cash in requests</p>
+                                </div>
+                            ) : (
+                                cashInRequests.map((req) => (
+                                    <div key={req.id} className="glass rounded-xl p-4 sm:p-6">
+                                        <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center justify-between">
+                                            <div className="flex-1">
+                                                <div className="flex items-center gap-2 mb-2">
+                                                    <span className={`px-2 py-1 text-xs font-medium rounded ${STATUS_STYLES[req.status] || STATUS_STYLES.PENDING}`}>
+                                                        {req.status}
+                                                    </span>
+                                                    <span className="text-xs text-zinc-500">
+                                                        {new Date(req.createdAt).toLocaleDateString()}
+                                                    </span>
+                                                </div>
+                                                <div className="text-lg font-semibold text-white mb-1">
+                                                    ₱{req.amount.toFixed(2)}
+                                                </div>
+                                                <div className="text-sm text-zinc-400">
+                                                    {req.user.email} • {req.paymentMethod.toUpperCase()}
+                                                </div>
+                                            </div>
+
+                                            {/* Preview Receipt */}
+                                            {req.proofUrl && (
+                                                <div className="lg:w-48">
+                                                    <button
+                                                        onClick={() => setSelectedReceipt(req.proofUrl)}
+                                                        className="w-full h-32 rounded-lg overflow-hidden bg-zinc-800 hover:opacity-90 transition-opacity"
+                                                    >
+                                                        <Image
+                                                            src={req.proofUrl}
+                                                            alt="Receipt"
+                                                            width={200}
+                                                            height={150}
+                                                            className="w-full h-full object-cover"
+                                                        />
+                                                    </button>
+                                                </div>
+                                            )}
+
+                                            <div className="flex items-center gap-4">
+                                                {req.status === "PENDING" && (
+                                                    <div className="flex gap-2">
+                                                        <button
+                                                            onClick={() => handleCashInAction(req.id, "approve")}
+                                                            disabled={processingId === req.id}
+                                                            className="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-500 disabled:opacity-50"
+                                                        >
+                                                            {processingId === req.id ? "..." : "Approve"}
+                                                        </button>
+                                                        <button
+                                                            onClick={() => handleCashInAction(req.id, "reject")}
+                                                            disabled={processingId === req.id}
+                                                            className="px-4 py-2 text-sm font-medium text-red-400 border border-red-400/30 rounded-lg hover:bg-red-400/10 disabled:opacity-50"
+                                                        >
+                                                            Reject
+                                                        </button>
+                                                    </div>
+                                                )}
+                                                {req.status === "APPROVED" && (
+                                                    <span className="text-sm text-green-400">✓ Approved</span>
+                                                )}
+                                                {req.status === "REJECTED" && (
                                                     <span className="text-sm text-red-400">✗ Rejected</span>
                                                 )}
                                             </div>
