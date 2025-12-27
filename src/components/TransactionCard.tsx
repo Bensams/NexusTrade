@@ -46,7 +46,7 @@ export default function TransactionCard({ listing, order }: TransactionCardProps
     return (
         <div className="glass border-b border-white/10 p-3 sticky top-0 z-10">
             <Link
-                href={order ? `/orders` : `/listings/${listing.id}`}
+                href={`/listings/${listing.id}`}
                 className="flex items-center gap-3 group"
             >
                 {/* Thumbnail */}

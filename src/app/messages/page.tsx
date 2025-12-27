@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useSession } from "next-auth/react";
+import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import Navbar from "@/components/Navbar";
@@ -32,16 +33,32 @@ interface Conversation {
     } | null;
 }
 
-export default function MessagesPage() {
+function MessagesContent() {
     const { data: session, status } = useSession();
+    const searchParams = useSearchParams();
+    const router = useRouter();
     const [conversations, setConversations] = useState<Conversation[]>([]);
     const [isLoading, setIsLoading] = useState(true);
+
+    const orderId = searchParams?.get("orderId");
 
     useEffect(() => {
         if (session) {
             fetchConversations();
         }
     }, [session]);
+
+    // Auto-redirect to conversation if orderId is provided
+    useEffect(() => {
+        if (orderId && conversations.length > 0) {
+            const matchingConversation = conversations.find(
+                (conv) => conv.order?.id === orderId
+            );
+            if (matchingConversation) {
+                router.replace(`/messages/${matchingConversation.id}`);
+            }
+        }
+    }, [orderId, conversations, router]);
 
     const fetchConversations = async () => {
         try {
@@ -158,5 +175,17 @@ export default function MessagesPage() {
                 </div>
             </div>
         </div>
+    );
+}
+
+export default function MessagesPage() {
+    return (
+        <Suspense fallback={
+            <div className="min-h-screen flex items-center justify-center">
+                <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+            </div>
+        }>
+            <MessagesContent />
+        </Suspense>
     );
 }

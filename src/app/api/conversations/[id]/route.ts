@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import prisma from "@/lib/db";
+import { emitNewMessage } from "@/lib/socketServer";
 
 // GET messages for a conversation
 export async function GET(
@@ -103,6 +104,36 @@ export async function POST(
         await prisma.conversation.update({
             where: { id },
             data: { updatedAt: new Date() },
+        });
+
+        // Emit message via Socket.io for real-time delivery
+        emitNewMessage(id, {
+            id: message.id,
+            content: message.content,
+            createdAt: message.createdAt.toISOString(),
+            sender: message.sender,
+        });
+
+        // Get other participants to notify them
+        const participants = await prisma.conversationParticipant.findMany({
+            where: {
+                conversationId: id,
+                userId: {
+                    not: session.user.id
+                }
+            }
+        });
+
+        // Import the new function dynamically or use the import if added to top
+        const { emitMessageToUser } = await import("@/lib/socketServer");
+
+        participants.forEach(p => {
+            emitMessageToUser(p.userId, {
+                id: message.id,
+                content: message.content,
+                createdAt: message.createdAt.toISOString(),
+                sender: message.sender,
+            });
         });
 
         return NextResponse.json(message, { status: 201 });

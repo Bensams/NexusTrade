@@ -36,12 +36,14 @@ export async function GET() {
                         price: true,
                         imageUrl: true,
                         game: true,
+                        sellerId: true,
                     },
                 },
                 order: {
                     select: {
                         id: true,
                         status: true,
+                        deliveryProof: true,
                     },
                 },
             },
