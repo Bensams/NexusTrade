@@ -2,18 +2,37 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useSession, signOut } from "next-auth/react";
 import { useRouter } from "next/navigation";
+import { getSocket } from "@/lib/socket";
+import { HelpCircle, MessageCircle } from "lucide-react";
+import { NotificationBadge } from "./NotificationBadge";
+
+interface Notification {
+    id: string;
+    type: string;
+    title: string;
+    message: string;
+    isRead: boolean;
+    orderId?: string | null;
+    listingId?: string | null;
+    createdAt: string;
+}
 
 export default function Navbar() {
     const { data: session, status } = useSession();
     const router = useRouter();
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const [isProfileOpen, setIsProfileOpen] = useState(false);
+    const [isNotificationOpen, setIsNotificationOpen] = useState(false);
     const [isSeller, setIsSeller] = useState(false);
     const [isAdmin, setIsAdmin] = useState(false);
     const [searchQuery, setSearchQuery] = useState("");
+    const [notifications, setNotifications] = useState<Notification[]>([]);
+    const [unreadCount, setUnreadCount] = useState(0);
+    const [unreadMessageCount, setUnreadMessageCount] = useState(0); // For chat messages
+    const [isLoadingNotifications, setIsLoadingNotifications] = useState(false);
 
     const handleSearch = (e: React.FormEvent) => {
         e.preventDefault();
@@ -21,6 +40,68 @@ export default function Navbar() {
             router.push(`/search?query=${encodeURIComponent(searchQuery.trim())}`);
         }
     };
+
+    const fetchNotifications = useCallback(async () => {
+        if (!session) return;
+        setIsLoadingNotifications(true);
+        try {
+            const res = await fetch("/api/notifications?limit=10");
+            if (res.ok) {
+                const data = await res.json();
+                setNotifications(data.notifications || []);
+                setUnreadCount(data.unreadCount || 0);
+            }
+        } catch (error) {
+            console.error("Error fetching notifications:", error);
+        } finally {
+            setIsLoadingNotifications(false);
+        }
+    }, [session]);
+
+    const fetchUnreadMessages = useCallback(async () => {
+        if (!session) return;
+        try {
+            // Assume API endpoint exists as per instructions
+            const res = await fetch("/api/messages/unread-count");
+            if (res.ok) {
+                const data = await res.json();
+                setUnreadMessageCount(data.count || 0);
+            }
+        } catch (error) {
+            console.error("Error fetching unread messages:", error);
+        }
+    }, [session]);
+
+    // Socket.io connection for real-time notifications
+    useEffect(() => {
+        if (!session?.user?.id) return;
+
+        const socket = getSocket();
+        const userId = session.user.id;
+
+        // Join user-specific room for notifications
+        socket.emit("join-user", userId);
+
+        // Listen for new notifications
+        const handleNewNotification = (notification: Notification) => {
+            setNotifications((prev) => [notification, ...prev]);
+            setUnreadCount((prev) => prev + 1);
+        };
+
+        // Listen for new messages (assuming socket event exists)
+        const handleNewMessage = () => {
+            setUnreadMessageCount((prev) => prev + 1);
+        };
+
+        socket.on("new-notification", handleNewNotification);
+        socket.on("new-message", handleNewMessage);
+
+        return () => {
+            socket.emit("leave-user", userId);
+            socket.off("new-notification", handleNewNotification);
+            socket.off("new-message", handleNewMessage);
+        };
+    }, [session?.user?.id]);
 
     useEffect(() => {
         const checkUserStatus = async () => {
@@ -37,7 +118,163 @@ export default function Navbar() {
             }
         };
         checkUserStatus();
-    }, [session]);
+        fetchNotifications();
+        fetchUnreadMessages();
+    }, [session, fetchNotifications, fetchUnreadMessages]);
+
+    // Poll for new notifications every 30 seconds (fallback)
+    useEffect(() => {
+        if (!session) return;
+        const interval = setInterval(() => {
+            fetchNotifications();
+        }, 30000); // Poll every 30 seconds as fallback
+        return () => clearInterval(interval);
+    }, [session, fetchNotifications]);
+
+    // Close dropdowns when clicking outside
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            const target = event.target as HTMLElement;
+            if (
+                !target.closest('[data-notification-dropdown]') &&
+                !target.closest('[data-notification-button]')
+            ) {
+                setIsNotificationOpen(false);
+            }
+            if (
+                !target.closest('[data-profile-dropdown]') &&
+                !target.closest('[data-profile-button]')
+            ) {
+                setIsProfileOpen(false);
+            }
+        };
+
+        if (isNotificationOpen || isProfileOpen) {
+            document.addEventListener("mousedown", handleClickOutside);
+            return () => document.removeEventListener("mousedown", handleClickOutside);
+        }
+    }, [isNotificationOpen, isProfileOpen]);
+
+    const markAsRead = async (notificationId: string) => {
+        try {
+            const res = await fetch("/api/notifications", {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ notificationIds: [notificationId] }),
+            });
+            if (res.ok) {
+                setNotifications((prev) =>
+                    prev.map((n) => (n.id === notificationId ? { ...n, isRead: true } : n))
+                );
+                setUnreadCount((prev) => Math.max(0, prev - 1));
+            }
+        } catch (error) {
+            console.error("Error marking notification as read:", error);
+        }
+    };
+
+    const markAllAsRead = async () => {
+        try {
+            const res = await fetch("/api/notifications", {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ markAllRead: true }),
+            });
+            if (res.ok) {
+                setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
+                setUnreadCount(0);
+            }
+        } catch (error) {
+            console.error("Error marking all notifications as read:", error);
+        }
+    };
+
+    const getNotificationIcon = (type: string) => {
+        switch (type) {
+            case "PAYMENT_APPROVED":
+            case "ORDER_COMPLETED":
+            case "PAYOUT_APPROVED":
+                return "✓";
+            case "PAYMENT_DECLINED":
+            case "PAYOUT_REJECTED":
+                return "✕";
+            case "NEW_ORDER":
+            case "ORDER_DELIVERED":
+                return "📦";
+            case "PAYMENT_TO_REVIEW":
+            case "DELIVERY_TO_REVIEW":
+            case "PAYOUT_REQUEST":
+                return "🔔";
+            default:
+                return "•";
+        }
+    };
+
+    const getNotificationColor = (type: string) => {
+        switch (type) {
+            case "PAYMENT_APPROVED":
+            case "ORDER_COMPLETED":
+            case "PAYOUT_APPROVED":
+                return "text-green-400";
+            case "PAYMENT_DECLINED":
+            case "PAYOUT_REJECTED":
+                return "text-red-400";
+            case "NEW_ORDER":
+            case "ORDER_DELIVERED":
+                return "text-blue-400";
+            case "PAYMENT_TO_REVIEW":
+            case "DELIVERY_TO_REVIEW":
+            case "PAYOUT_REQUEST":
+                return "text-yellow-400";
+            default:
+                return "text-zinc-400";
+        }
+    };
+
+    const handleNotificationClick = (notification: Notification) => {
+        markAsRead(notification.id);
+        setIsNotificationOpen(false);
+
+        // Navigate based on notification type
+        // Admin notifications should go to admin dashboard
+        const adminNotificationTypes = ["PAYMENT_TO_REVIEW", "DELIVERY_TO_REVIEW", "PAYOUT_REQUEST", "CASHIN_TO_REVIEW"];
+        // Seller notifications should go to seller dashboard
+        const sellerNotificationTypes = ["NEW_ORDER", "PAYOUT_APPROVED", "PAYOUT_REJECTED"];
+        // Buyer notifications that should go to messages (conversation with seller)
+        const buyerMessageNotificationTypes = ["PAYMENT_APPROVED"];
+        // Wallet notifications - navigate to wallet page
+        const walletNotificationTypes = ["DELIVERY_APPROVED", "DELIVERY_REJECTED", "ORDER_REFUNDED", "CASHIN_APPROVED", "CASHIN_REJECTED"];
+
+        if (adminNotificationTypes.includes(notification.type)) {
+            router.push(`/admin`);
+        } else if (walletNotificationTypes.includes(notification.type)) {
+            router.push(`/wallet`);
+        } else if (sellerNotificationTypes.includes(notification.type)) {
+            router.push(`/orders/seller`);
+        } else if (buyerMessageNotificationTypes.includes(notification.type) && notification.orderId) {
+            // Navigate to messages with orderId to find the conversation
+            router.push(`/messages?orderId=${notification.orderId}`);
+        } else if (notification.orderId) {
+            router.push(`/orders`);
+        } else if (notification.listingId) {
+            router.push(`/listings/${notification.listingId}`);
+        }
+    };
+
+    const formatTimeAgo = (dateString: string) => {
+        const date = new Date(dateString);
+        const now = new Date();
+        const seconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+
+        if (seconds < 60) return "just now";
+        const minutes = Math.floor(seconds / 60);
+        if (minutes < 60) return `${minutes}m ago`;
+        const hours = Math.floor(minutes / 60);
+        if (hours < 24) return `${hours}h ago`;
+        const days = Math.floor(hours / 24);
+        if (days < 7) return `${days}d ago`;
+        return date.toLocaleDateString();
+    };
 
     return (
         <nav className="fixed top-0 left-0 right-0 z-50 glass border-b border-white/10">
@@ -79,6 +316,21 @@ export default function Navbar() {
 
                     {/* Right Side - Auth */}
                     <div className="hidden md:flex items-center gap-4">
+                        <Link
+                            href="/support"
+                            className="p-2 text-zinc-400 hover:text-white transition-colors"
+                            aria-label="Support"
+                        >
+                            <HelpCircle className="w-6 h-6" />
+                        </Link>
+                        <Link
+                            href="/messages"
+                            className="relative p-2 text-zinc-400 hover:text-white transition-colors"
+                            aria-label="Messages"
+                        >
+                            <MessageCircle className="w-6 h-6" />
+                            <NotificationBadge count={unreadMessageCount} />
+                        </Link>
                         {status === "loading" ? (
                             <div className="w-8 h-8 rounded-full bg-zinc-800 animate-pulse" />
                         ) : session?.user ? (
@@ -98,9 +350,133 @@ export default function Navbar() {
                                         Become a Seller
                                     </Link>
                                 )}
-                                <div className="relative">
+
+                                {/* Notification Bell */}
+                                <div className="relative" data-notification-dropdown>
                                     <button
-                                        onClick={() => setIsProfileOpen(!isProfileOpen)}
+                                        data-notification-button
+                                        onClick={() => {
+                                            setIsNotificationOpen(!isNotificationOpen);
+                                            setIsProfileOpen(false);
+                                            if (!isNotificationOpen) {
+                                                fetchNotifications();
+                                            }
+                                        }}
+                                        className="relative p-2 rounded-lg hover:bg-white/5 transition-colors"
+                                        aria-label="Notifications"
+                                    >
+                                        <svg
+                                            className="w-6 h-6 text-zinc-300"
+                                            fill="none"
+                                            stroke="currentColor"
+                                            viewBox="0 0 24 24"
+                                        >
+                                            <path
+                                                strokeLinecap="round"
+                                                strokeLinejoin="round"
+                                                strokeWidth={2}
+                                                d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"
+                                            />
+                                        </svg>
+                                        {unreadCount > 0 && (
+                                            <span className="absolute top-1 right-1 flex items-center justify-center w-5 h-5 text-xs font-bold text-white bg-red-500 rounded-full">
+                                                {unreadCount > 9 ? "9+" : unreadCount}
+                                            </span>
+                                        )}
+                                    </button>
+
+                                    {/* Notification Dropdown */}
+                                    {isNotificationOpen && (
+                                        <div className="absolute right-0 mt-2 w-96 glass rounded-xl border border-white/10 shadow-lg z-50 max-h-[600px] flex flex-col">
+                                            <div className="p-4 border-b border-white/10 flex items-center justify-between">
+                                                <h3 className="text-lg font-semibold text-white">Notifications</h3>
+                                                {unreadCount > 0 && (
+                                                    <button
+                                                        onClick={markAllAsRead}
+                                                        className="text-sm text-primary hover:text-primary/80 transition-colors"
+                                                    >
+                                                        Mark all as read
+                                                    </button>
+                                                )}
+                                            </div>
+                                            <div className="overflow-y-auto flex-1">
+                                                {isLoadingNotifications ? (
+                                                    <div className="p-8 text-center">
+                                                        <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto" />
+                                                        <p className="text-zinc-400 mt-2">Loading...</p>
+                                                    </div>
+                                                ) : notifications.length === 0 ? (
+                                                    <div className="p-8 text-center">
+                                                        <svg
+                                                            className="w-12 h-12 text-zinc-600 mx-auto mb-3"
+                                                            fill="none"
+                                                            stroke="currentColor"
+                                                            viewBox="0 0 24 24"
+                                                        >
+                                                            <path
+                                                                strokeLinecap="round"
+                                                                strokeLinejoin="round"
+                                                                strokeWidth={2}
+                                                                d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"
+                                                            />
+                                                        </svg>
+                                                        <p className="text-zinc-400">No notifications</p>
+                                                    </div>
+                                                ) : (
+                                                    <div className="divide-y divide-white/10">
+                                                        {notifications.map((notification) => (
+                                                            <button
+                                                                key={notification.id}
+                                                                onClick={() => handleNotificationClick(notification)}
+                                                                className={`w-full text-left p-4 hover:bg-white/5 transition-colors ${!notification.isRead ? "bg-primary/10" : ""
+                                                                    }`}
+                                                            >
+                                                                <div className="flex items-start gap-3">
+                                                                    <div
+                                                                        className={`text-xl ${getNotificationColor(
+                                                                            notification.type
+                                                                        )}`}
+                                                                    >
+                                                                        {getNotificationIcon(notification.type)}
+                                                                    </div>
+                                                                    <div className="flex-1 min-w-0">
+                                                                        <div className="flex items-start justify-between gap-2">
+                                                                            <p
+                                                                                className={`text-sm font-medium ${!notification.isRead
+                                                                                    ? "text-white"
+                                                                                    : "text-zinc-300"
+                                                                                    }`}
+                                                                            >
+                                                                                {notification.title}
+                                                                            </p>
+                                                                            {!notification.isRead && (
+                                                                                <span className="w-2 h-2 bg-primary rounded-full flex-shrink-0 mt-1" />
+                                                                            )}
+                                                                        </div>
+                                                                        <p className="text-sm text-zinc-400 mt-1 line-clamp-2">
+                                                                            {notification.message}
+                                                                        </p>
+                                                                        <p className="text-xs text-zinc-500 mt-2">
+                                                                            {formatTimeAgo(notification.createdAt)}
+                                                                        </p>
+                                                                    </div>
+                                                                </div>
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+
+                                <div className="relative" data-profile-dropdown>
+                                    <button
+                                        data-profile-button
+                                        onClick={() => {
+                                            setIsProfileOpen(!isProfileOpen);
+                                            setIsNotificationOpen(false);
+                                        }}
                                         className="flex items-center gap-2 p-1 rounded-lg hover:bg-white/5 transition-colors"
                                     >
                                         {session.user.image ? (
@@ -182,23 +558,21 @@ export default function Navbar() {
                                                 My Orders
                                             </Link>
                                             {isSeller && (
-                                                <>
-                                                    <Link
-                                                        href="/orders/seller"
-                                                        className="block px-4 py-2 text-sm text-zinc-300 hover:bg-white/5 hover:text-white transition-colors"
-                                                        onClick={() => setIsProfileOpen(false)}
-                                                    >
-                                                        Seller Dashboard
-                                                    </Link>
-                                                    <Link
-                                                        href="/wallet"
-                                                        className="block px-4 py-2 text-sm text-green-400 hover:bg-white/5 hover:text-green-300 transition-colors"
-                                                        onClick={() => setIsProfileOpen(false)}
-                                                    >
-                                                        💰 Wallet
-                                                    </Link>
-                                                </>
+                                                <Link
+                                                    href="/orders/seller"
+                                                    className="block px-4 py-2 text-sm text-zinc-300 hover:bg-white/5 hover:text-white transition-colors"
+                                                    onClick={() => setIsProfileOpen(false)}
+                                                >
+                                                    Seller Dashboard
+                                                </Link>
                                             )}
+                                            <Link
+                                                href="/wallet"
+                                                className="block px-4 py-2 text-sm text-green-400 hover:bg-white/5 hover:text-green-300 transition-colors"
+                                                onClick={() => setIsProfileOpen(false)}
+                                            >
+                                                💰 Wallet
+                                            </Link>
                                             {isAdmin && (
                                                 <Link
                                                     href="/admin"
@@ -277,6 +651,7 @@ export default function Navbar() {
                                 className="w-full px-4 py-2 rounded-lg bg-zinc-900/80 border border-white/10 text-white placeholder-zinc-400 focus:outline-none focus:border-primary/50"
                             />
                         </div>
+
                         {session?.user ? (
                             <div className="space-y-2">
                                 <div className="px-4 py-2 border-b border-white/10">
@@ -291,11 +666,51 @@ export default function Navbar() {
                                     Profile
                                 </Link>
                                 <Link
+                                    href="/orders"
+                                    className="block px-4 py-2 text-sm text-zinc-300"
+                                    onClick={() => setIsMenuOpen(false)}
+                                >
+                                    My Orders {unreadCount > 0 && <span className="ml-2 px-2 py-0.5 text-xs bg-red-500 text-white rounded-full">{unreadCount}</span>}
+                                </Link>
+                                <Link
+                                    href="/messages"
+                                    className="block px-4 py-2 text-sm text-zinc-300"
+                                    onClick={() => setIsMenuOpen(false)}
+                                >
+                                    Messages
+                                </Link>
+                                <Link
                                     href="/listings/my"
                                     className="block px-4 py-2 text-sm text-zinc-300"
                                     onClick={() => setIsMenuOpen(false)}
                                 >
                                     My Listings
+                                </Link>
+                                <Link
+                                    href="/wallet"
+                                    className="block px-4 py-2 text-sm text-green-400"
+                                    onClick={() => setIsMenuOpen(false)}
+                                >
+                                    💰 Wallet
+                                </Link>
+                                {isAdmin && (
+                                    <Link
+                                        href="/admin"
+                                        className="block px-4 py-2 text-sm text-yellow-400"
+                                        onClick={() => setIsMenuOpen(false)}
+                                    >
+                                        Admin Dashboard
+                                    </Link>
+                                )}
+                                <Link
+                                    href="/support"
+                                    className="block px-4 py-2 text-sm text-zinc-300 hover:bg-white/5 hover:text-white"
+                                    onClick={() => setIsMenuOpen(false)}
+                                >
+                                    <div className="flex items-center gap-2">
+                                        <HelpCircle className="w-4 h-4" />
+                                        <span>Support Center</span>
+                                    </div>
                                 </Link>
                                 <button
                                     onClick={() => signOut()}
@@ -306,6 +721,16 @@ export default function Navbar() {
                             </div>
                         ) : (
                             <div className="flex flex-col gap-2">
+                                <Link
+                                    href="/support"
+                                    className="block px-4 py-2 text-sm text-zinc-300 hover:bg-white/5 hover:text-white"
+                                    onClick={() => setIsMenuOpen(false)}
+                                >
+                                    <div className="flex items-center gap-2">
+                                        <HelpCircle className="w-4 h-4" />
+                                        <span>Support Center</span>
+                                    </div>
+                                </Link>
                                 <Link
                                     href="/login"
                                     className="px-4 py-2 text-sm font-medium text-zinc-300 hover:text-white transition-colors"

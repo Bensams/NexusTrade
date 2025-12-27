@@ -8,6 +8,7 @@ interface CreateNotificationParams {
     message: string;
     orderId?: string;
     listingId?: string;
+    cashInRequestId?: string;
 }
 
 /**
@@ -21,6 +22,7 @@ export async function createNotification({
     message,
     orderId,
     listingId,
+    cashInRequestId,
 }: CreateNotificationParams) {
     const notification = await prisma.notification.create({
         data: {
@@ -30,6 +32,7 @@ export async function createNotification({
             message,
             orderId: orderId || null,
             listingId: listingId || null,
+            cashInRequestId: cashInRequestId || null
         },
     });
 
@@ -45,6 +48,7 @@ export async function createAdminNotification({
     message,
     orderId,
     listingId,
+    cashInRequestId,
 }: Omit<CreateNotificationParams, "userId">) {
     const admins = await prisma.user.findMany({
         where: { isAdmin: true },
@@ -60,6 +64,7 @@ export async function createAdminNotification({
                 message,
                 orderId,
                 listingId,
+                cashInRequestId,
             })
         )
     );
