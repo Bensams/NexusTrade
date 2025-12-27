@@ -1,21 +1,68 @@
+# Dependencies
 node_modules
+.pnpm-store
+
+# Build outputs (we build fresh in Docker)
 .next
+out
+dist
+build
+
+# Version control
 .git
 .gitignore
-README.md
+.gitattributes
+
+# IDE and editors
+.idea
+.vscode
+*.swp
+*.swo
+.DS_Store
+
+# Environment files (secrets should be passed at runtime)
 .env
-.env*.local
+.env.*
+!.env.example
+
+# Logs
+*.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
-.DS_Store
-*.pem
+
+# Testing
 coverage
-.vercel
-*.tsbuildinfo
-next-env.d.ts
-docker-compose.yml
+.nyc_output
+__tests__
+*.test.ts
+*.test.tsx
+*.spec.ts
+*.spec.tsx
+jest.config.*
+cypress
+playwright
+
+# Documentation
+README.md
+CHANGELOG.md
+LICENSE
+docs
+
+# Docker files (not needed inside container)
 Dockerfile
+docker-compose*.yml
 .dockerignore
 
+# Misc
+*.pem
+*.tsbuildinfo
+.vercel
+.turbo
+
+# Prisma migrations history (schema is enough)
+prisma/migrations
+
+# Public uploads (mounted as volume)
+public/uploads
