@@ -4,23 +4,28 @@ A full-stack e-commerce marketplace built with Next.js, TypeScript, Prisma, and 
 
 ## Features
 
-- 🔐 Authentication (Email/Password + Google OAuth)
-- 🛒 Buy/Sell Listings Management
-- 💳 Payment Processing with Receipt Upload
-- 📦 Order Management System
-- 💰 Seller Wallet & Withdrawal System
-- 🔔 Comprehensive Notification System
-- 💬 Real-time Messaging
-- ⭐ Review System
-- 👨‍💼 Admin Dashboard
+- 🔐 **Authentication** - Email/Password + Google OAuth
+- 🛒 **Listings Management** - Buy & sell items/services
+- 💳 **Payment Processing** - Receipt upload with admin approval
+- 📦 **Order Management** - Full order lifecycle tracking
+- 💰 **Wallet System** - Cash-in, withdrawals, and balance management
+- � **Cash-In Requests** - User deposits with admin approval workflow
+- 🔔 **Notification System** - Real-time notifications for all events
+- 💬 **Real-time Messaging** - Socket.IO powered chat with transaction context
+- 🔍 **Advanced Search** - Filter by game, price range, and listing type
+- 👤 **User Profiles** - Public seller profiles with reviews and listings
+- ⭐ **Review System** - Rate and review completed transactions
+- 🎫 **Support Center** - FAQ and help resources
+- 👨‍💼 **Admin Dashboard** - Manage orders, payments, cash-ins, and withdrawals
 
 ## Tech Stack
 
 - **Frontend/Backend**: Next.js 15 (App Router)
 - **Language**: TypeScript
-- **Database**: PostgreSQL
+- **Database**: PostgreSQL 16
 - **ORM**: Prisma
 - **Authentication**: NextAuth.js v5
+- **Real-time**: Socket.IO
 - **Styling**: Tailwind CSS
 - **Containerization**: Docker & Docker Compose
 
@@ -55,12 +60,21 @@ A full-stack e-commerce marketplace built with Next.js, TypeScript, Prisma, and 
    GOOGLE_CLIENT_SECRET=your-google-client-secret
    ```
 
-4. **Build and start containers**
+4. **Run the system**
+
+   **For Production (Deploying):**
+   Run your standard command. It will use the new, faster Dockerfile.
    ```bash
-   docker-compose up -d --build
+   docker compose up --build
    ```
 
-5. **Run database migrations**
+   **For Development (Coding):**
+   Run this command. It will start the Next.js dev server with Hot Reloading.
+   ```bash
+   docker compose -f docker-compose.dev.yml up
+   ```
+
+5. **Run database migrations** (First time setup)
    ```bash
    docker-compose exec app npx prisma migrate deploy
    ```
@@ -110,17 +124,17 @@ A full-stack e-commerce marketplace built with Next.js, TypeScript, Prisma, and 
 ## Docker Commands
 
 ```bash
-# Start all services
-docker-compose up -d
+# Production: Build and start containers (uses optimized Dockerfile)
+docker compose up --build
+
+# Development: Start with Hot Reloading (uses docker-compose.dev.yml)
+docker compose -f docker-compose.dev.yml up
 
 # Stop all services
 docker-compose down
 
 # View logs
 docker-compose logs -f app
-
-# Rebuild containers
-docker-compose up -d --build
 
 # Access app container shell
 docker-compose exec app sh
@@ -130,6 +144,37 @@ docker-compose exec app npx prisma studio
 docker-compose exec app npx prisma migrate deploy
 docker-compose exec app npx prisma generate
 ```
+
+## Development Workflow
+
+For the fastest development experience with hot reloading, use the database in Docker while running the app locally:
+
+```bash
+# Start development (hot reload) - runs app locally with Docker database
+npm run dev
+
+# When ready to test production build
+docker-compose up --build -d
+
+# Stop Docker app but keep database running
+docker-compose stop app
+
+# Stop everything (including database)
+docker-compose down
+
+# View database with Prisma Studio GUI
+npx prisma studio
+```
+
+### Recommended Development Flow
+
+| Phase | Command | Description |
+|-------|---------|-------------|
+| **Daily Development** | `npm run dev` | Fast hot reload, instant changes |
+| **Database Only** | `docker-compose up -d db` | Just PostgreSQL in Docker |
+| **Production Test** | `docker-compose up --build -d` | Full containerized build |
+| **Deployment** | `docker-compose up --build -d` | Same as production test |
+
 
 ## Database Management
 
@@ -157,16 +202,25 @@ npx prisma studio
 NexusTrade/
 ├── prisma/
 │   └── schema.prisma          # Database schema
+├── pages/
+│   └── api/
+│       └── socketio.ts        # Socket.IO server endpoint
 ├── src/
 │   ├── app/
 │   │   ├── api/               # API routes
-│   │   └── ...                # Pages
+│   │   ├── admin/             # Admin dashboard
+│   │   ├── messages/          # Messaging pages
+│   │   ├── wallet/            # Wallet management
+│   │   ├── support/           # Support center
+│   │   ├── profile/           # User profiles
+│   │   └── ...                # Other pages
 │   ├── components/            # React components
-│   ├── lib/                   # Utilities (auth, db, notifications)
+│   ├── lib/                   # Utilities (auth, db, socket, wallet)
 │   └── types/                 # TypeScript types
 ├── public/
 │   └── uploads/               # User uploaded files
-├── docker-compose.yml         # Docker services configuration
+├── docker-compose.yml         # Production Docker config
+├── docker-compose.dev.yml     # Development Docker config
 ├── Dockerfile                 # App container definition
 └── package.json
 ```
@@ -230,6 +284,25 @@ The application includes a comprehensive notification system covering:
 - `PATCH /api/admin/orders` - Approve/reject orders
 - `GET /api/admin/withdrawals` - Get all withdrawals
 - `PATCH /api/admin/withdrawals` - Process withdrawals
+- `GET /api/admin/cashin` - Get pending cash-in requests
+- `PATCH /api/admin/cashin` - Approve/reject cash-in requests
+
+### Wallet
+- `GET /api/wallet/balance` - Get user wallet balance
+- `POST /api/wallet/cashin` - Submit cash-in request
+- `GET /api/wallet/transactions` - Get transaction history
+
+### Messages
+- `GET /api/messages/unread-count` - Get unread message count
+- `GET /api/conversations` - Get user conversations
+- `GET /api/conversations/[id]` - Get conversation messages
+
+### Users
+- `GET /api/users/[id]` - Get user public profile
+
+### Support
+- `GET /api/support/tickets` - Get user support tickets
+- `POST /api/support/tickets` - Create support ticket
 
 ## Contributing
 

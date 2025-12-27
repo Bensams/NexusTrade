@@ -7,6 +7,7 @@ import prisma from "./db";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
     adapter: PrismaAdapter(prisma),
+    trustHost: true, // Trust host for Docker/localhost environments
     providers: [
         Google({
             clientId: process.env.GOOGLE_CLIENT_ID!,
