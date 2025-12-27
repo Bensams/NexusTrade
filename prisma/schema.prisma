@@ -1,5 +1,6 @@
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
 }
 
 datasource db {
@@ -35,6 +36,46 @@ model User {
   reviewsGiven  Review[]  @relation("ReviewsGiven")
   reviewsReceived Review[] @relation("ReviewsReceived")
   notifications Notification[]
+  walletTransactions WalletTransaction[]
+  cashInRequests CashInRequest[]
+}
+
+
+model WalletTransaction {
+  id        String          @id @default(cuid())
+  amount    Float           // Positive for credit, negative for debit
+  type      TransactionType
+  userId    String
+  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  auditId   String?         // Reference ID (Order ID, Withdrawal ID, etc)
+  createdAt DateTime        @default(now())
+}
+
+model CashInRequest {
+  id            String        @id @default(cuid())
+  amount        Float
+  status        RequestStatus @default(PENDING)
+  proofUrl      String?
+  paymentMethod String
+  userId        String
+  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+}
+
+enum RequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+
+enum TransactionType {
+  DEPOSIT
+  WITHDRAWAL
+  PURCHASE
+  SALE
+  REFUND
 }
 
 model Account {
@@ -213,6 +254,7 @@ model Notification {
   isRead      Boolean          @default(false)
   orderId     String?          // Related order if applicable
   listingId   String?          // Related listing if applicable
+  cashInRequestId String?      // Related cash-in request
   createdAt   DateTime         @default(now())
 
   user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -234,4 +276,12 @@ enum NotificationType {
   PAYMENT_TO_REVIEW     // New payment submission
   DELIVERY_TO_REVIEW    // New delivery submission
   PAYOUT_REQUEST        // New withdrawal request
+  CASHIN_TO_REVIEW      // New cash-in request
+
+  // Additional types
+  DELIVERY_APPROVED     // Delivery proof approved (Seller notification)
+  DELIVERY_REJECTED     // Delivery proof rejected (Seller notification)
+  ORDER_REFUNDED        // Order refund processed (Buyer/Seller notification)
+  CASHIN_APPROVED       // Cash-in approved
+  CASHIN_REJECTED       // Cash-in rejected
 }
