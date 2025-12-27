@@ -19,6 +19,7 @@ export async function GET() {
                 payoutMethod: true,
                 payoutNumber: true,
                 fullName: true,
+                isSeller: true,
             },
         });
 
@@ -48,6 +49,7 @@ export async function GET() {
             payoutMethod: user.payoutMethod,
             payoutNumber: user.payoutNumber,
             fullName: user.fullName,
+            isSeller: user.isSeller,
             withdrawals,
         });
     } catch (error) {
@@ -88,7 +90,11 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: "User not found" }, { status: 404 });
         }
 
-        if (!user.isSeller || !user.payoutMethod || !user.payoutNumber || !user.fullName) {
+        if (!user.isSeller) {
+            return NextResponse.json({ error: "Withdrawals are only available for verified sellers" }, { status: 403 });
+        }
+
+        if (!user.payoutMethod || !user.payoutNumber || !user.fullName) {
             return NextResponse.json({ error: "Complete seller setup first" }, { status: 400 });
         }
 

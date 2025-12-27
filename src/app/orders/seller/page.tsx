@@ -37,6 +37,16 @@ const STATUS_STYLES: Record<string, string> = {
     CANCELLED: "bg-red-500/20 text-red-400",
 };
 
+type FilterType = "ALL" | "AWAITING_DELIVERY" | "PENDING_VERIFICATION" | "COMPLETED" | "CANCELLED";
+
+const FILTER_TABS: { key: FilterType; label: string }[] = [
+    { key: "ALL", label: "All" },
+    { key: "AWAITING_DELIVERY", label: "Awaiting Delivery" },
+    { key: "PENDING_VERIFICATION", label: "Pending Verification" },
+    { key: "COMPLETED", label: "Completed" },
+    { key: "CANCELLED", label: "Cancelled" },
+];
+
 export default function SellerOrdersPage() {
     const { data: session, status } = useSession();
     const [orders, setOrders] = useState<SellerOrder[]>([]);
@@ -45,6 +55,7 @@ export default function SellerOrdersPage() {
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const [previewUrl, setPreviewUrl] = useState<string | null>(null);
     const [uploadModalOrder, setUploadModalOrder] = useState<SellerOrder | null>(null);
+    const [activeFilter, setActiveFilter] = useState<FilterType>("ALL");
 
     useEffect(() => {
         if (session) {
@@ -65,6 +76,24 @@ export default function SellerOrdersPage() {
             setIsLoading(false);
         }
     };
+
+    // Filter orders based on active filter
+    const getFilteredOrders = () => {
+        switch (activeFilter) {
+            case "AWAITING_DELIVERY":
+                return orders.filter((o) => o.status === "PAID");
+            case "PENDING_VERIFICATION":
+                return orders.filter((o) => o.status === "DELIVERY_SUBMITTED");
+            case "COMPLETED":
+                return orders.filter((o) => o.status === "COMPLETED");
+            case "CANCELLED":
+                return orders.filter((o) => o.status === "CANCELLED" || o.status === "REFUNDED");
+            default:
+                return orders;
+        }
+    };
+
+    const filteredOrders = getFilteredOrders();
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -107,20 +136,9 @@ export default function SellerOrdersPage() {
         }
     };
 
-    const startConversation = async (buyerId: string) => {
-        try {
-            const res = await fetch("/api/conversations", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ recipientId: buyerId }),
-            });
-            if (res.ok) {
-                const data = await res.json();
-                window.location.href = `/messages/${data.conversationId}`;
-            }
-        } catch (error) {
-            console.error("Error:", error);
-        }
+    // Navigate to existing conversation for this order
+    const goToConversation = (orderId: string) => {
+        window.location.href = `/messages?orderId=${orderId}`;
     };
 
     if (status === "loading" || isLoading) {
@@ -185,14 +203,44 @@ export default function SellerOrdersPage() {
                         </div>
                     </div>
 
-                    {orders.length === 0 ? (
+                    {/* Filter Tabs */}
+                    <div className="flex flex-wrap gap-2 mb-6">
+                        {FILTER_TABS.map((tab) => (
+                            <button
+                                key={tab.key}
+                                onClick={() => setActiveFilter(tab.key)}
+                                className={`px-4 py-2 text-sm font-medium rounded-lg transition-all ${activeFilter === tab.key
+                                    ? "bg-gradient-to-r from-primary to-accent text-white"
+                                    : "glass text-zinc-400 hover:text-white hover:bg-white/5"
+                                    }`}
+                            >
+                                {tab.label}
+                                {tab.key !== "ALL" && (
+                                    <span className="ml-2 px-1.5 py-0.5 text-xs rounded-full bg-white/10">
+                                        {tab.key === "AWAITING_DELIVERY" && paidOrders.length}
+                                        {tab.key === "PENDING_VERIFICATION" && orders.filter((o) => o.status === "DELIVERY_SUBMITTED").length}
+                                        {tab.key === "COMPLETED" && completedOrders.length}
+                                        {tab.key === "CANCELLED" && orders.filter((o) => o.status === "CANCELLED" || o.status === "REFUNDED").length}
+                                    </span>
+                                )}
+                            </button>
+                        ))}
+                    </div>
+
+                    {filteredOrders.length === 0 ? (
                         <div className="glass rounded-2xl p-12 text-center">
-                            <h3 className="text-xl font-semibold text-white mb-2">No orders yet</h3>
-                            <p className="text-zinc-400">Orders will appear here when buyers purchase your listings</p>
+                            <h3 className="text-xl font-semibold text-white mb-2">
+                                {activeFilter === "ALL" ? "No orders yet" : `No ${FILTER_TABS.find(t => t.key === activeFilter)?.label.toLowerCase()} orders`}
+                            </h3>
+                            <p className="text-zinc-400">
+                                {activeFilter === "ALL"
+                                    ? "Orders will appear here when buyers purchase your listings"
+                                    : "Try selecting a different filter"}
+                            </p>
                         </div>
                     ) : (
                         <div className="space-y-4">
-                            {orders.map((order) => (
+                            {filteredOrders.map((order) => (
                                 <div key={order.id} className="glass rounded-xl p-4 sm:p-6">
                                     <div className="flex flex-col lg:flex-row gap-4">
                                         {/* Buyer Info */}
@@ -215,7 +263,7 @@ export default function SellerOrdersPage() {
                                             <div>
                                                 <p className="font-medium text-white">{order.buyer.name}</p>
                                                 <button
-                                                    onClick={() => startConversation(order.buyer.id)}
+                                                    onClick={() => goToConversation(order.id)}
                                                     className="text-xs text-primary hover:underline"
                                                 >
                                                     Message Buyer
