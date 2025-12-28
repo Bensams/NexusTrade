@@ -15,7 +15,9 @@ export async function GET(request: Request) {
 
         // Search listings
         if (searchType === "all" || searchType === "listings") {
-            const listingWhere: Record<string, unknown> = {};
+            const listingWhere: Record<string, unknown> = {
+                isBanned: false, // Hide banned listings from search results
+            };
 
             if (query) {
                 listingWhere.OR = [
@@ -55,7 +57,10 @@ export async function GET(request: Request) {
         if (query && (searchType === "all" || searchType === "users")) {
             const users = await prisma.user.findMany({
                 where: {
-                    name: { contains: query, mode: "insensitive" },
+                    OR: [
+                        { name: { contains: query, mode: "insensitive" } },
+                        { email: { contains: query, mode: "insensitive" } },
+                    ],
                 },
                 take: Math.min(limit, 10),
                 select: {
@@ -63,7 +68,7 @@ export async function GET(request: Request) {
                     name: true,
                     image: true,
                     isSeller: true,
-                    isAdmin: true,
+                    role: true,
                     _count: {
                         select: {
                             listings: true,
@@ -77,7 +82,7 @@ export async function GET(request: Request) {
                 name: user.name,
                 image: user.image,
                 isSeller: user.isSeller,
-                isAdmin: user.isAdmin,
+                isAdmin: user.role === "ADMIN" || user.role === "SUPER_ADMIN",
                 listingCount: user._count.listings,
             }));
         }
@@ -96,4 +101,5 @@ export async function GET(request: Request) {
         );
     }
 }
+
 

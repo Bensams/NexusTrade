@@ -24,6 +24,7 @@ export async function GET() {
                 bio: true,
                 balance: true,
                 isSeller: true,
+                role: true,
                 createdAt: true,
                 _count: {
                     select: {

@@ -1,9 +1,23 @@
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import prisma from "@/lib/db";
+import { isIPBlacklisted } from "@/lib/banCheck";
+import { getClientIP } from "@/lib/auditLog";
 
 export async function POST(request: Request) {
     try {
+        // Check if IP is banned FIRST (before any other logic to save resources)
+        const clientIP = getClientIP(request);
+        if (clientIP) {
+            const banCheck = await isIPBlacklisted(clientIP);
+            if (banCheck.banned) {
+                return NextResponse.json(
+                    { error: banCheck.message || "Registration not allowed" },
+                    { status: 403 }
+                );
+            }
+        }
+
         const body = await request.json();
         const { name, email, password } = body;
 

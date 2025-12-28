@@ -10,32 +10,45 @@ export async function POST() {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
 
-        // 1. Find an Admin user
-        // We'll take the first one we find. In a more complex app, you might have a specific "Support" admin or round-robin logic.
-        const adminUser = await prisma.user.findFirst({
+        // 1. Find an available support agent (isSupportAgent = true AND ADMIN/MODERATOR/SUPER_ADMIN)
+        let supportAgent = await prisma.user.findFirst({
             where: {
-                isAdmin: true,
+                isSupportAgent: true,
+                role: { in: ["SUPER_ADMIN", "ADMIN", "MODERATOR"] },
+                id: { not: session.user.id }, // Don't connect user to themselves
             },
             select: {
                 id: true,
                 name: true,
             },
+            // Random-ish selection by ordering by different field each time
+            orderBy: { createdAt: "asc" },
         });
 
-        if (!adminUser) {
-            return NextResponse.json({ error: "No admin support agents available" }, { status: 404 });
+        // Fallback: If no designated support agent, find any admin as backup
+        if (!supportAgent) {
+            supportAgent = await prisma.user.findFirst({
+                where: {
+                    role: { in: ["SUPER_ADMIN", "ADMIN"] },
+                    id: { not: session.user.id },
+                },
+                select: {
+                    id: true,
+                    name: true,
+                },
+            });
         }
 
-        if (adminUser.id === session.user.id) {
-            return NextResponse.json({ error: "You are the admin" }, { status: 400 });
+        if (!supportAgent) {
+            return NextResponse.json({ error: "No support agents available" }, { status: 404 });
         }
 
-        // 2. Check for existing conversation
+        // 2. Check for existing conversation with this support agent
         const existingConversation = await prisma.conversation.findFirst({
             where: {
                 AND: [
                     { participants: { some: { userId: session.user.id } } },
-                    { participants: { some: { userId: adminUser.id } } },
+                    { participants: { some: { userId: supportAgent.id } } },
                     { listingId: null }, // General support chat (not linked to a specific listing)
                     { orderId: null },   // Not linked to a specific order
                 ],
@@ -55,7 +68,7 @@ export async function POST() {
                 participants: {
                     create: [
                         { userId: session.user.id },
-                        { userId: adminUser.id },
+                        { userId: supportAgent.id },
                     ],
                 },
             },
@@ -74,3 +87,4 @@ export async function POST() {
         );
     }
 }
+

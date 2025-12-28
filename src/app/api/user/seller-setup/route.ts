@@ -15,7 +15,7 @@ export async function GET() {
             where: { id: session.user.id },
             select: {
                 isSeller: true,
-                isAdmin: true,
+                role: true,
                 fullName: true,
                 payoutMethod: true,
                 payoutNumber: true,
@@ -32,7 +32,8 @@ export async function GET() {
         return NextResponse.json({
             isComplete,
             isSeller: user.isSeller,
-            isAdmin: user.isAdmin,
+            isAdmin: user.role === "ADMIN" || user.role === "SUPER_ADMIN",
+            role: user.role,
             fullName: user.fullName,
             payoutMethod: user.payoutMethod,
             payoutNumber: user.payoutNumber,

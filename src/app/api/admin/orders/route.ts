@@ -1,26 +1,14 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
 import prisma from "@/lib/db";
 import { createNotification } from "@/lib/notifications";
+import { getTransactionFeePercent, calculateSellerEarnings } from "@/lib/platformFee";
+import { requireRole } from "@/lib/roleAuth";
 
 // GET all orders for admin
 export async function GET() {
     try {
-        const session = await auth();
-
-        if (!session?.user?.id) {
-            return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-        }
-
-        // Check if user is admin
-        const user = await prisma.user.findUnique({
-            where: { id: session.user.id },
-            select: { isAdmin: true },
-        });
-
-        if (!user?.isAdmin) {
-            return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-        }
+        const result = await requireRole("ADMIN");
+        if ("error" in result) return result.error;
 
         const orders = await prisma.order.findMany({
             include: {
@@ -48,21 +36,8 @@ export async function GET() {
 // PATCH approve or reject payment
 export async function PATCH(request: Request) {
     try {
-        const session = await auth();
-
-        if (!session?.user?.id) {
-            return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-        }
-
-        // Check if user is admin
-        const user = await prisma.user.findUnique({
-            where: { id: session.user.id },
-            select: { isAdmin: true },
-        });
-
-        if (!user?.isAdmin) {
-            return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-        }
+        const result = await requireRole("ADMIN");
+        if ("error" in result) return result.error;
 
         const body = await request.json();
         const { orderId, action } = body;
@@ -158,9 +133,10 @@ export async function PATCH(request: Request) {
                 });
             }
             // Verify delivery (DELIVERY_SUBMITTED -> COMPLETED)
-            // Credit seller with 90% of the price (10% platform fee)
+            // Credit seller with earnings after dynamic platform fee
             else if (order.status === "DELIVERY_SUBMITTED") {
-                const sellerEarnings = order.listing.price * 0.9;
+                const feePercent = await getTransactionFeePercent();
+                const sellerEarnings = calculateSellerEarnings(order.listing.price, feePercent);
 
                 await prisma.$transaction([
                     prisma.order.update({

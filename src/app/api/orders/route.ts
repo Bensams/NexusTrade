@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import prisma from "@/lib/db";
+import { logActivity, getClientIP, getUserAgent } from "@/lib/auditLog";
 
 // GET user's orders (as buyer)
 export async function GET() {
@@ -126,6 +127,22 @@ export async function POST(request: Request) {
                     },
                 },
             },
+        });
+
+        // Log the order creation activity
+        logActivity({
+            userId: session.user.id,
+            actionType: "ORDER_CREATED",
+            resourceId: order.id,
+            resourceType: "order",
+            metadata: {
+                listingId: listing.id,
+                listingTitle: listing.title,
+                price: listing.price,
+                sellerId: listing.sellerId,
+            },
+            ipAddress: getClientIP(request) || undefined,
+            userAgent: getUserAgent(request) || undefined,
         });
 
         return NextResponse.json(order, { status: 201 });

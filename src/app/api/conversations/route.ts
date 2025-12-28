@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import prisma from "@/lib/db";
+import { logActivity, getClientIP, getUserAgent } from "@/lib/auditLog";
 
 // GET all conversations for current user
 export async function GET() {
@@ -115,6 +116,18 @@ export async function POST(request: Request) {
             return NextResponse.json({ conversationId: existing.id });
         }
 
+        // Fetch recipient info for audit log (non-sensitive metadata)
+        const recipient = await prisma.user.findUnique({
+            where: { id: recipientId },
+            select: { id: true, name: true },
+        });
+
+        // Fetch listing info if provided
+        const listing = listingId ? await prisma.listing.findUnique({
+            where: { id: listingId },
+            select: { id: true, title: true },
+        }) : null;
+
         // Create new conversation with optional listing context
         const conversation = await prisma.conversation.create({
             data: {
@@ -126,6 +139,22 @@ export async function POST(request: Request) {
                     ],
                 },
             },
+        });
+
+        // Log the chat initiation activity (only metadata, no message content)
+        logActivity({
+            userId: session.user.id,
+            actionType: "CHAT_INITIATED",
+            resourceId: conversation.id,
+            resourceType: "conversation",
+            metadata: {
+                recipientId: recipient?.id,
+                recipientName: recipient?.name,
+                listingId: listing?.id,
+                listingTitle: listing?.title,
+            },
+            ipAddress: getClientIP(request) || undefined,
+            userAgent: getUserAgent(request) || undefined,
         });
 
         return NextResponse.json({ conversationId: conversation.id }, { status: 201 });

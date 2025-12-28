@@ -1,11 +1,15 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import prisma from "@/lib/db";
+import { logActivity, getClientIP, getUserAgent } from "@/lib/auditLog";
 
 // GET all listings
 export async function GET() {
     try {
         const listings = await prisma.listing.findMany({
+            where: {
+                isBanned: false, // Hide banned listings from marketplace
+            },
             include: {
                 seller: {
                     select: {
@@ -78,6 +82,22 @@ export async function POST(request: Request) {
                     },
                 },
             },
+        });
+
+        // Log the listing creation activity
+        logActivity({
+            userId: session.user.id,
+            actionType: "LISTING_CREATED",
+            resourceId: listing.id,
+            resourceType: "listing",
+            metadata: {
+                title: listing.title,
+                price: listing.price,
+                type: listing.type,
+                game: listing.game,
+            },
+            ipAddress: getClientIP(request) || undefined,
+            userAgent: getUserAgent(request) || undefined,
         });
 
         return NextResponse.json(listing, { status: 201 });

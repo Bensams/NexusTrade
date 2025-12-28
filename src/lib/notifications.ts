@@ -51,7 +51,7 @@ export async function createAdminNotification({
     cashInRequestId,
 }: Omit<CreateNotificationParams, "userId">) {
     const admins = await prisma.user.findMany({
-        where: { isAdmin: true },
+        where: { role: { in: ["SUPER_ADMIN", "ADMIN"] } },
         select: { id: true },
     });
 

@@ -1,21 +1,13 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
 import prisma from "@/lib/db";
 import { createNotification } from "@/lib/notifications";
+import { requireRole } from "@/lib/roleAuth";
 
 // GET all cash in requests (for admin)
 export async function GET() {
     try {
-        const session = await auth();
-        if (!session?.user?.id) return new NextResponse("Unauthorized", { status: 401 });
-
-        // Verify Admin
-        const user = await prisma.user.findUnique({
-            where: { id: session.user.id },
-            select: { isAdmin: true },
-        });
-
-        if (!user?.isAdmin) return new NextResponse("Forbidden", { status: 403 });
+        const result = await requireRole("ADMIN");
+        if ("error" in result) return result.error;
 
         const requests = await prisma.cashInRequest.findMany({
             include: {
@@ -41,16 +33,8 @@ export async function GET() {
 // PATCH approve/reject cash in request
 export async function PATCH(request: Request) {
     try {
-        const session = await auth();
-        if (!session?.user?.id) return new NextResponse("Unauthorized", { status: 401 });
-
-        // Verify Admin
-        const user = await prisma.user.findUnique({
-            where: { id: session.user.id },
-            select: { isAdmin: true },
-        });
-
-        if (!user?.isAdmin) return new NextResponse("Forbidden", { status: 403 });
+        const result = await requireRole("ADMIN");
+        if ("error" in result) return result.error;
 
         const { id, action } = await request.json();
 
@@ -99,7 +83,7 @@ export async function PATCH(request: Request) {
                 // 4. Notify User
                 await createNotification({
                     userId: cashInRequest.userId,
-                    type: "CASHIN_APPROVED", // Ensure this enum exists in usage
+                    type: "CASHIN_APPROVED",
                     title: "Cash In Approved",
                     message: `Your cash in request for ₱${cashInRequest.amount.toLocaleString()} has been approved.`,
                     cashInRequestId: id,
@@ -128,3 +112,4 @@ export async function PATCH(request: Request) {
         return new NextResponse("Internal Server Error", { status: 500 });
     }
 }
+

@@ -17,7 +17,7 @@ export async function GET(
                 image: true,
                 bio: true,
                 isSeller: true,
-                isAdmin: true,
+                role: true,
                 createdAt: true,
                 _count: {
                     select: {
@@ -25,6 +25,7 @@ export async function GET(
                     },
                 },
                 listings: {
+                    where: { isBanned: false },
                     take: 6,
                     orderBy: { createdAt: "desc" },
                     select: {
@@ -79,7 +80,8 @@ export async function GET(
             image: user.image,
             bio: user.bio,
             isSeller: user.isSeller,
-            isAdmin: user.isAdmin,
+            isAdmin: user.role === "ADMIN" || user.role === "SUPER_ADMIN",
+            role: user.role,
             createdAt: user.createdAt,
             stats: {
                 listings: user._count.listings,
@@ -94,4 +96,5 @@ export async function GET(
         return NextResponse.json({ error: "Failed to fetch profile" }, { status: 500 });
     }
 }
+
 
