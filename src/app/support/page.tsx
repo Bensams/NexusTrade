@@ -1,34 +1,78 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { MessageCircle, Mail, ChevronDown, ChevronUp, Shield, HelpCircle, FileText, Lock } from 'lucide-react';
+import { MessageCircle, Mail, ChevronDown, ChevronUp, HelpCircle } from 'lucide-react';
 import Link from 'next/link';
 
-// Mock Data for FAQ
-const faqs = [
-    {
-        question: "How does the Escrow system work?",
-        answer: "When you purchase an item, your money is held safely in our Escrow system. The seller is notified to deliver the item. Once you confirm receipt, the funds are released to the seller. This ensures a safe transaction for both parties."
-    },
-    {
-        question: "Is my personal information safe?",
-        answer: "Yes, we use industry-standard encryption to protect your data. Your payment details are never stored on our servers, and we only share necessary information with sellers for transaction purposes."
-    },
-    {
-        question: "What are the platform fees?",
-        answer: "NexusTrade charges a small flat fee of 5% per transaction to cover platform maintenance and support. There are no hidden fees for buyers."
-    },
-    {
-        question: "How do I verify my account?",
-        answer: "To verify your account, go to your Profile settings and upload a valid government-issued ID. Verification helps build trust within the community and unlocks higher transaction limits."
-    }
-];
+interface SiteSettings {
+    supportEmail: string | null;
+    discordLink: string | null;
+    twitterLink: string | null;
+    instagramLink: string | null;
+}
 
 export default function SupportPage() {
     const router = useRouter();
     const [openIndex, setOpenIndex] = useState<number | null>(0);
     const [isStartingChat, setIsStartingChat] = useState(false);
+    const [feePercent, setFeePercent] = useState(5);
+    const [siteSettings, setSiteSettings] = useState<SiteSettings>({
+        supportEmail: null,
+        discordLink: null,
+        twitterLink: null,
+        instagramLink: null,
+    });
+
+    // Fetch platform fee and site settings on mount
+    useEffect(() => {
+        const fetchData = async () => {
+            try {
+                const [feeRes, settingsRes] = await Promise.all([
+                    fetch("/api/platform-fee"),
+                    fetch("/api/site-settings"),
+                ]);
+
+                if (feeRes.ok) {
+                    const data = await feeRes.json();
+                    setFeePercent(data.transactionFeePercent);
+                }
+
+                if (settingsRes.ok) {
+                    const data = await settingsRes.json();
+                    setSiteSettings({
+                        supportEmail: data.supportEmail || null,
+                        discordLink: data.discordLink || null,
+                        twitterLink: data.twitterLink || null,
+                        instagramLink: data.instagramLink || null,
+                    });
+                }
+            } catch (error) {
+                console.error("Error fetching data:", error);
+            }
+        };
+        fetchData();
+    }, []);
+
+    // FAQs with dynamic fee
+    const faqs = [
+        {
+            question: "How does the Escrow system work?",
+            answer: "When you purchase an item, your money is held safely in our Escrow system. The seller is notified to deliver the item. Once you confirm receipt, the funds are released to the seller. This ensures a safe transaction for both parties."
+        },
+        {
+            question: "Is my personal information safe?",
+            answer: "Yes, we use industry-standard encryption to protect your data. Your payment details are never stored on our servers, and we only share necessary information with sellers for transaction purposes."
+        },
+        {
+            question: "What are the platform fees?",
+            answer: `NexusTrade currently charges a ${feePercent}% fee per transaction to cover platform maintenance and support. This fee is deducted from seller earnings. Note: Platform fees may be adjusted by administrators and are subject to change.`
+        },
+        {
+            question: "How do I verify my account?",
+            answer: "To verify your account, go to your Profile settings and upload a valid government-issued ID. Verification helps build trust within the community and unlocks higher transaction limits."
+        }
+    ];
 
     const toggleFAQ = (index: number) => {
         setOpenIndex(openIndex === index ? null : index);
@@ -157,18 +201,22 @@ export default function SupportPage() {
                             For complex inquiries or non-urgent matters, drop us an email.
                         </p>
 
-                        <a
-                            href="mailto:benedictsamson05@gmail.com"
-                            className="flex items-center gap-3 text-cyan-400 hover:text-cyan-300 transition-colors font-medium text-lg p-3 rounded-lg hover:bg-zinc-800/50"
-                        >
-                            <Mail className="w-5 h-5" />
-                            benedictsamson05@gmail.com
-                        </a>
+                        {siteSettings.supportEmail ? (
+                            <a
+                                href={`mailto:${siteSettings.supportEmail}`}
+                                className="flex items-center gap-3 text-cyan-400 hover:text-cyan-300 transition-colors font-medium text-lg p-3 rounded-lg hover:bg-zinc-800/50"
+                            >
+                                <Mail className="w-5 h-5" />
+                                {siteSettings.supportEmail}
+                            </a>
+                        ) : (
+                            <p className="text-zinc-500 italic">No support email configured</p>
+                        )}
                     </div>
                 </div>
             </div>
 
-            {/* Footer Section (Requested Addition) */}
+            {/* Footer Section */}
             <footer className="mt-20 pt-8 border-t border-zinc-800/50 text-center md:text-left">
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
                     <div className="col-span-1 md:col-span-2">
@@ -190,9 +238,21 @@ export default function SupportPage() {
                     <div>
                         <h4 className="text-zinc-100 font-semibold mb-4">Community</h4>
                         <ul className="space-y-2 text-zinc-400">
-                            <li><a href="#" className="hover:text-cyan-400 transition-colors">Discord</a></li>
-                            <li><a href="#" className="hover:text-cyan-400 transition-colors">Twitter</a></li>
-                            <li><a href="#" className="hover:text-cyan-400 transition-colors">Instagram</a></li>
+                            {siteSettings.discordLink ? (
+                                <li><a href={siteSettings.discordLink} target="_blank" rel="noopener noreferrer" className="hover:text-cyan-400 transition-colors">Discord</a></li>
+                            ) : (
+                                <li><span className="text-zinc-600">Discord</span></li>
+                            )}
+                            {siteSettings.twitterLink ? (
+                                <li><a href={siteSettings.twitterLink} target="_blank" rel="noopener noreferrer" className="hover:text-cyan-400 transition-colors">Twitter</a></li>
+                            ) : (
+                                <li><span className="text-zinc-600">Twitter</span></li>
+                            )}
+                            {siteSettings.instagramLink ? (
+                                <li><a href={siteSettings.instagramLink} target="_blank" rel="noopener noreferrer" className="hover:text-cyan-400 transition-colors">Instagram</a></li>
+                            ) : (
+                                <li><span className="text-zinc-600">Instagram</span></li>
+                            )}
                         </ul>
                     </div>
                 </div>
@@ -204,3 +264,4 @@ export default function SupportPage() {
         </div>
     );
 }
+

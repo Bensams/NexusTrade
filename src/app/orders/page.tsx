@@ -287,14 +287,22 @@ export default function OrdersPage() {
                                                 <div className="text-xl font-bold gradient-text">
                                                     ₱{order.listing.price.toFixed(2)}
                                                 </div>
-                                                {order.status === "PENDING" && (
-                                                    <button
-                                                        onClick={() => handleCancel(order.id)}
-                                                        disabled={cancellingId === order.id}
-                                                        className="px-4 py-2 text-sm font-medium text-red-400 border border-red-400/30 rounded-lg hover:bg-red-400/10 transition-colors disabled:opacity-50"
-                                                    >
-                                                        {cancellingId === order.id ? "..." : "Cancel"}
-                                                    </button>
+                                                {(order.status === "PENDING" || order.status === "AWAITING_PAYMENT") && (
+                                                    <div className="flex items-center gap-2">
+                                                        <Link
+                                                            href={`/checkout/${order.id}`}
+                                                            className="px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-primary to-accent rounded-lg hover:opacity-90 transition-all"
+                                                        >
+                                                            Pay Now
+                                                        </Link>
+                                                        <button
+                                                            onClick={() => handleCancel(order.id)}
+                                                            disabled={cancellingId === order.id}
+                                                            className="px-4 py-2 text-sm font-medium text-red-400 border border-red-400/30 rounded-lg hover:bg-red-400/10 transition-colors disabled:opacity-50"
+                                                        >
+                                                            {cancellingId === order.id ? "..." : "Cancel"}
+                                                        </button>
+                                                    </div>
                                                 )}
                                             </div>
                                         </div>

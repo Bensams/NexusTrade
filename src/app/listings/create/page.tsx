@@ -6,11 +6,17 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Navbar from "@/components/Navbar";
 
-const GAMES = ["Roblox", "Valorant", "CS2", "Fortnite", "League of Legends", "Apex Legends"];
-const LISTING_TYPES = [
-    { value: "ITEM", label: "Item" },
-    { value: "SERVICE", label: "Service" },
-];
+interface Game {
+    id: string;
+    name: string;
+    slug: string;
+}
+
+interface ItemType {
+    id: string;
+    name: string;
+    slug: string;
+}
 
 export default function CreateListingPage() {
     const { data: session, status } = useSession();
@@ -19,14 +25,60 @@ export default function CreateListingPage() {
     const [isCheckingSetup, setIsCheckingSetup] = useState(true);
     const [error, setError] = useState("");
 
+    // Dynamic data from API
+    const [games, setGames] = useState<Game[]>([]);
+    const [itemTypes, setItemTypes] = useState<ItemType[]>([]);
+    const [feePercent, setFeePercent] = useState(5);
+    const [isLoadingOptions, setIsLoadingOptions] = useState(true);
+
     const [formData, setFormData] = useState({
         title: "",
         description: "",
         price: "",
-        type: "ITEM",
-        game: "Roblox",
+        type: "",
+        game: "",
         imageUrl: "",
     });
+
+    // Fetch games, item types, and platform fee on mount
+    useEffect(() => {
+        const fetchData = async () => {
+            try {
+                const [gamesRes, typesRes, feeRes] = await Promise.all([
+                    fetch("/api/games"),
+                    fetch("/api/item-types"),
+                    fetch("/api/platform-fee"),
+                ]);
+
+                if (gamesRes.ok) {
+                    const gamesData = await gamesRes.json();
+                    setGames(gamesData);
+                    if (gamesData.length > 0) {
+                        setFormData(prev => ({ ...prev, game: prev.game || gamesData[0].name }));
+                    }
+                }
+
+                if (typesRes.ok) {
+                    const typesData = await typesRes.json();
+                    setItemTypes(typesData);
+                    if (typesData.length > 0) {
+                        setFormData(prev => ({ ...prev, type: prev.type || typesData[0].name }));
+                    }
+                }
+
+                if (feeRes.ok) {
+                    const feeData = await feeRes.json();
+                    setFeePercent(feeData.transactionFeePercent);
+                }
+            } catch (error) {
+                console.error("Error fetching data:", error);
+            } finally {
+                setIsLoadingOptions(false);
+            }
+        };
+
+        fetchData();
+    }, []);
 
     // Check if seller setup is complete
     useEffect(() => {
@@ -92,9 +144,9 @@ export default function CreateListingPage() {
         });
     };
 
-    // Calculate earnings after 10% fee
+    // Calculate earnings after platform fee
     const price = parseFloat(formData.price) || 0;
-    const earnings = price * 0.9;
+    const earnings = price * (1 - feePercent / 100);
 
     if (status === "loading" || isCheckingSetup) {
         return (
@@ -206,7 +258,7 @@ export default function CreateListingPage() {
                                     </div>
                                     {price > 0 && (
                                         <p className="text-xs text-zinc-500 mt-1">
-                                            You&apos;ll receive: <span className="text-primary">₱{earnings.toFixed(2)}</span> (after 10% fee)
+                                            You&apos;ll receive: <span className="text-primary">₱{earnings.toFixed(2)}</span> (after {feePercent}% fee)
                                         </p>
                                     )}
                                 </div>
@@ -220,13 +272,20 @@ export default function CreateListingPage() {
                                         name="type"
                                         value={formData.type}
                                         onChange={handleChange}
-                                        className="w-full px-4 py-3 rounded-xl bg-zinc-900/80 border border-white/10 text-white focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition-all"
+                                        disabled={isLoadingOptions}
+                                        className="w-full px-4 py-3 rounded-xl bg-zinc-900/80 border border-white/10 text-white focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition-all disabled:opacity-50"
                                     >
-                                        {LISTING_TYPES.map((type) => (
-                                            <option key={type.value} value={type.value}>
-                                                {type.label}
-                                            </option>
-                                        ))}
+                                        {isLoadingOptions ? (
+                                            <option>Loading types...</option>
+                                        ) : itemTypes.length === 0 ? (
+                                            <option>No types available</option>
+                                        ) : (
+                                            itemTypes.map((type) => (
+                                                <option key={type.id} value={type.name}>
+                                                    {type.name}
+                                                </option>
+                                            ))
+                                        )}
                                     </select>
                                 </div>
                             </div>
@@ -241,13 +300,20 @@ export default function CreateListingPage() {
                                     name="game"
                                     value={formData.game}
                                     onChange={handleChange}
-                                    className="w-full px-4 py-3 rounded-xl bg-zinc-900/80 border border-white/10 text-white focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition-all"
+                                    disabled={isLoadingOptions}
+                                    className="w-full px-4 py-3 rounded-xl bg-zinc-900/80 border border-white/10 text-white focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition-all disabled:opacity-50"
                                 >
-                                    {GAMES.map((game) => (
-                                        <option key={game} value={game}>
-                                            {game}
-                                        </option>
-                                    ))}
+                                    {isLoadingOptions ? (
+                                        <option>Loading games...</option>
+                                    ) : games.length === 0 ? (
+                                        <option>No games available</option>
+                                    ) : (
+                                        games.map((game) => (
+                                            <option key={game.id} value={game.name}>
+                                                {game.name}
+                                            </option>
+                                        ))
+                                    )}
                                 </select>
                             </div>
 

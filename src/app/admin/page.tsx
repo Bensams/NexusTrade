@@ -6,6 +6,10 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 import Navbar from "@/components/Navbar";
 import { PageSkeleton } from "@/components/Skeleton";
+import AdminSettings from "@/components/AdminSettings";
+import AuditLogTable from "@/components/AuditLogTable";
+import AnalyticsWidget from "@/components/AnalyticsWidget";
+import UserManagement from "@/components/UserManagement";
 
 interface AdminOrder {
     id: string;
@@ -62,6 +66,8 @@ interface CashInRequest {
     };
 }
 
+type Role = "SUPER_ADMIN" | "ADMIN" | "MODERATOR" | "USER";
+
 const STATUS_STYLES: Record<string, string> = {
     PENDING: "bg-zinc-500/20 text-zinc-400",
     AWAITING_PAYMENT: "bg-blue-500/20 text-blue-400",
@@ -85,14 +91,30 @@ export default function AdminDashboard() {
     const [selectedReceipt, setSelectedReceipt] = useState<string | null>(null);
     const [processingId, setProcessingId] = useState<string | null>(null);
     const [filter, setFilter] = useState<string>("all");
+    const [currentUserRole, setCurrentUserRole] = useState<Role>("ADMIN");
 
     useEffect(() => {
         if (session) {
             fetchOrders();
             fetchWithdrawals();
             fetchCashInRequests();
+            fetchCurrentUserRole();
         }
     }, [session]);
+
+    const fetchCurrentUserRole = async () => {
+        try {
+            const res = await fetch("/api/user/profile");
+            if (res.ok) {
+                const data = await res.json();
+                if (data.role) {
+                    setCurrentUserRole(data.role);
+                }
+            }
+        } catch (error) {
+            console.error("Error fetching user role:", error);
+        }
+    };
 
     const fetchOrders = async () => {
         try {
@@ -238,7 +260,7 @@ export default function AdminDashboard() {
                             <p className="text-zinc-400">Manage payments, orders, and withdrawals</p>
                         </div>
                         <div className="flex gap-2 flex-wrap">
-                            {["all", "payments", "delivery", "withdrawals", "cashin", "completed"].map((f) => (
+                            {["all", "payments", "delivery", "withdrawals", "cashin", "moderation", "activity", "completed", "settings"].map((f) => (
                                 <button
                                     key={f}
                                     onClick={() => setFilter(f)}
@@ -247,11 +269,14 @@ export default function AdminDashboard() {
                                         : "bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
                                         }`}
                                 >
-                                    {f === "payments" ? "Payments" : f === "delivery" ? "Delivery" : f === "cashin" ? "Cash In" : f.charAt(0).toUpperCase() + f.slice(1)}
+                                    {f === "payments" ? "Payments" : f === "delivery" ? "Delivery" : f === "cashin" ? "Cash In" : f === "moderation" ? "🛡️ Moderation" : f === "activity" ? "📋 Activity" : f === "settings" ? "⚙️ Settings" : f.charAt(0).toUpperCase() + f.slice(1)}
                                 </button>
                             ))}
                         </div>
                     </div>
+
+                    {/* Live Analytics Widget */}
+                    <AnalyticsWidget />
 
                     {/* Stats */}
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
@@ -358,6 +383,12 @@ export default function AdminDashboard() {
                                 ))
                             )}
                         </div>
+                    ) : filter === "settings" ? (
+                        <AdminSettings />
+                    ) : filter === "moderation" ? (
+                        <UserManagement currentUserRole={currentUserRole} />
+                    ) : filter === "activity" ? (
+                        <AuditLogTable />
                     ) : filter === "cashin" ? (
                         <div className="space-y-4">
                             <h2 className="text-xl font-semibold text-white mb-4">Cash In Requests</h2>

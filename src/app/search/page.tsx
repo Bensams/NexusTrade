@@ -54,7 +54,7 @@ function SearchContent() {
     const [searchInput, setSearchInput] = useState(query);
     const [selectedGame, setSelectedGame] = useState("All Games");
     const [selectedType, setSelectedType] = useState("All Types");
-    const [activeTab, setActiveTab] = useState<"listings" | "users">("listings");
+    const [activeTab, setActiveTab] = useState<"all" | "listings" | "users">("all");
 
     useEffect(() => {
         fetchResults();
@@ -147,6 +147,15 @@ function SearchContent() {
                     {query && (
                         <div className="flex gap-2 mb-6">
                             <button
+                                onClick={() => setActiveTab("all")}
+                                className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${activeTab === "all"
+                                    ? "bg-primary text-white"
+                                    : "bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
+                                    }`}
+                            >
+                                All ({listings.length + users.length})
+                            </button>
+                            <button
                                 onClick={() => setActiveTab("listings")}
                                 className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${activeTab === "listings"
                                     ? "bg-primary text-white"
@@ -167,10 +176,10 @@ function SearchContent() {
                         </div>
                     )}
 
-                    {/* Filters (only for listings) */}
-                    {activeTab === "listings" && (
+                    {/* Filters (for listings and all tabs) */}
+                    {(activeTab === "listings" || activeTab === "all") && (
                         <>
-                            <div className="flex flex-wrap gap-3 mb-8">
+                            <div className="flex flex-wrap gap-3 mb-4">
                                 <div className="flex flex-wrap gap-2">
                                     {GAMES.map((game) => (
                                         <button
@@ -187,7 +196,7 @@ function SearchContent() {
                                 </div>
                             </div>
 
-                            <div className="flex gap-2 mb-8">
+                            <div className="flex gap-2 mb-6">
                                 {TYPES.map((type) => (
                                     <button
                                         key={type}
@@ -219,6 +228,107 @@ function SearchContent() {
                                     </div>
                                 </div>
                             ))}
+                        </div>
+                    ) : activeTab === "all" ? (
+                        // Combined All View
+                        <div className="space-y-8">
+                            {/* Users Section */}
+                            {users.length > 0 && (
+                                <div>
+                                    <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+                                        <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                                        </svg>
+                                        Users ({users.length})
+                                    </h3>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                                        {users.map((user) => (
+                                            <Link
+                                                key={user.id}
+                                                href={`/profile/${user.id}`}
+                                                className="glass rounded-xl p-4 hover:border-white/20 transition-colors group"
+                                            >
+                                                <div className="flex items-center gap-3">
+                                                    {user.image ? (
+                                                        <Image
+                                                            src={user.image}
+                                                            alt={user.name || "User"}
+                                                            width={48}
+                                                            height={48}
+                                                            className="w-12 h-12 rounded-full"
+                                                        />
+                                                    ) : (
+                                                        <div className="w-12 h-12 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center">
+                                                            <span className="text-lg font-bold text-white">
+                                                                {user.name?.charAt(0).toUpperCase() || "U"}
+                                                            </span>
+                                                        </div>
+                                                    )}
+                                                    <div className="flex-1 min-w-0">
+                                                        <p className="font-medium text-white truncate group-hover:text-primary transition-colors">
+                                                            {user.name || "Anonymous"}
+                                                        </p>
+                                                        <div className="flex items-center gap-2 mt-1">
+                                                            {getRoleBadge(user)}
+                                                            {user.listingCount > 0 && (
+                                                                <span className="text-xs text-zinc-500">
+                                                                    {user.listingCount} listing{user.listingCount !== 1 ? "s" : ""}
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </Link>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Listings Section */}
+                            {listings.length > 0 && (
+                                <div>
+                                    <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+                                        <svg className="w-5 h-5 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                                        </svg>
+                                        Listings ({listings.length})
+                                    </h3>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                                        {listings.map((listing) => (
+                                            <ListingCard
+                                                key={listing.id}
+                                                id={listing.id}
+                                                title={listing.title}
+                                                price={listing.price}
+                                                originalPrice={listing.originalPrice}
+                                                game={listing.game}
+                                                gameImage={listing.imageUrl || GAME_IMAGES[listing.game] || GAME_IMAGES.Roblox}
+                                                sellerName={listing.seller.name || "Anonymous"}
+                                                type={listing.type}
+                                            />
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Empty State */}
+                            {listings.length === 0 && users.length === 0 && (
+                                <div className="glass rounded-2xl p-12 text-center">
+                                    <svg className="w-16 h-16 mx-auto text-zinc-600 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                    </svg>
+                                    <h3 className="text-xl font-semibold text-white mb-2">No results found</h3>
+                                    <p className="text-zinc-400 mb-6">
+                                        Try adjusting your search or filters
+                                    </p>
+                                    <Link
+                                        href="/"
+                                        className="px-6 py-3 bg-gradient-to-r from-primary to-accent text-white font-medium rounded-xl"
+                                    >
+                                        Back to Home
+                                    </Link>
+                                </div>
+                            )}
                         </div>
                     ) : activeTab === "users" ? (
                         // Users Grid

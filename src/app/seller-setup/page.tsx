@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -15,6 +15,23 @@ export default function SellerSetupPage() {
     const [agreed, setAgreed] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState("");
+    const [feePercent, setFeePercent] = useState(5);
+
+    // Fetch platform fee on mount
+    useEffect(() => {
+        const fetchFee = async () => {
+            try {
+                const res = await fetch("/api/platform-fee");
+                if (res.ok) {
+                    const data = await res.json();
+                    setFeePercent(data.transactionFeePercent);
+                }
+            } catch (error) {
+                console.error("Error fetching fee:", error);
+            }
+        };
+        fetchFee();
+    }, []);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -128,8 +145,8 @@ export default function SellerSetupPage() {
                                     type="button"
                                     onClick={() => setPayoutMethod("gcash")}
                                     className={`p-4 rounded-xl border-2 transition-colors ${payoutMethod === "gcash"
-                                            ? "border-blue-500 bg-blue-500/10"
-                                            : "border-white/10 hover:border-white/30"
+                                        ? "border-blue-500 bg-blue-500/10"
+                                        : "border-white/10 hover:border-white/30"
                                         }`}
                                 >
                                     <div className="w-10 h-10 mx-auto mb-2 bg-blue-500 rounded-lg flex items-center justify-center">
@@ -141,8 +158,8 @@ export default function SellerSetupPage() {
                                     type="button"
                                     onClick={() => setPayoutMethod("maya")}
                                     className={`p-4 rounded-xl border-2 transition-colors ${payoutMethod === "maya"
-                                            ? "border-green-500 bg-green-500/10"
-                                            : "border-white/10 hover:border-white/30"
+                                        ? "border-green-500 bg-green-500/10"
+                                        : "border-white/10 hover:border-white/30"
                                         }`}
                                 >
                                     <div className="w-10 h-10 mx-auto mb-2 bg-green-500 rounded-lg flex items-center justify-center">
@@ -179,13 +196,13 @@ export default function SellerSetupPage() {
                                 <div>
                                     <h3 className="font-semibold text-yellow-400 mb-1">Platform Fee Notice</h3>
                                     <p className="text-sm text-zinc-300">
-                                        NexusTrade charges a <strong className="text-yellow-400">10% platform fee</strong> on all transactions.
+                                        NexusTrade charges a <strong className="text-yellow-400">{feePercent}% platform fee</strong> on all transactions.
                                     </p>
                                     <div className="mt-2 p-2 rounded-lg bg-zinc-900/50 text-sm">
                                         <p className="text-zinc-400">Example:</p>
                                         <p className="text-white">
                                             Sell for <span className="text-green-400">₱150.00</span> → You receive{" "}
-                                            <span className="text-primary">₱135.00</span>
+                                            <span className="text-primary">₱{(150 * (1 - feePercent / 100)).toFixed(2)}</span>
                                         </p>
                                     </div>
                                 </div>
@@ -201,7 +218,7 @@ export default function SellerSetupPage() {
                                 className="w-5 h-5 mt-0.5 rounded border-white/30 bg-zinc-900 text-primary focus:ring-primary/50"
                             />
                             <span className="text-sm text-zinc-300">
-                                I understand and agree that NexusTrade will deduct a 10% platform fee from all my sales.
+                                I understand and agree that NexusTrade will deduct a {feePercent}% platform fee from all my sales.
                             </span>
                         </label>
 
