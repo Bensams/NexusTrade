@@ -8,6 +8,17 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// ============================================
+// RBAC - Role-Based Access Control
+// ============================================
+
+enum Role {
+  SUPER_ADMIN  // Owner: can do everything including manage other admins
+  ADMIN        // Can manage settings and support tickets
+  MODERATOR    // Content policing: review listings, mute/ban users
+  USER         // Default role for all users
+}
+
 model User {
   id              String    @id @default(cuid())
   name            String?
@@ -18,7 +29,9 @@ model User {
   bio             String?   // User bio/description
   balance         Float     @default(0)
   isSeller        Boolean   @default(false)
-  isAdmin         Boolean   @default(false)
+  role            Role      @default(USER)  // RBAC role for admin permissions
+  isSupportAgent  Boolean   @default(false) // Can receive support chat requests
+  bannedUntil     DateTime? // null = not banned, past = unbanned, future/9999 = banned
   fullName        String?   // Legal name for payouts
   payoutMethod    String?   // "gcash" | "maya"
   payoutNumber    String?   // Phone number for payouts
@@ -38,6 +51,7 @@ model User {
   notifications Notification[]
   walletTransactions WalletTransaction[]
   cashInRequests CashInRequest[]
+  auditLogs     AuditLog[]
 }
 
 
@@ -123,6 +137,7 @@ model Listing {
   game          String
   imageUrl      String?
   sellerId      String
+  isBanned      Boolean     @default(false)  // Admin can hide/takedown listings
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
   
@@ -284,4 +299,124 @@ enum NotificationType {
   ORDER_REFUNDED        // Order refund processed (Buyer/Seller notification)
   CASHIN_APPROVED       // Cash-in approved
   CASHIN_REJECTED       // Cash-in rejected
+
+  // System notifications
+  SYSTEM                // General system notification
+  FEE_UPDATED           // Platform fee has been updated
+}
+
+// ============================================
+// ADMIN CMS MODELS
+// ============================================
+
+// Singleton settings table - only one row exists
+model SystemSettings {
+  id                     String   @id @default("default")
+  transactionFeePercent  Float    @default(5.0)  // Platform fee percentage (0-100)
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+}
+
+// Site settings for social links and contact info (singleton)
+model SiteSettings {
+  id            String   @id @default("default")
+  discordLink   String?  // Discord server invite link
+  twitterLink   String?  // Twitter/X profile link
+  instagramLink String?  // Instagram profile link
+  supportEmail  String?  // Support email address
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+// Supported games on the marketplace
+model Game {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  slug      String   @unique  // URL-friendly name
+  imageUrl  String?
+  isActive  Boolean  @default(true)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// Item types/categories for listings
+model ItemType {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  slug      String   @unique
+  isActive  Boolean  @default(true)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ============================================
+// AUDIT LOG SYSTEM
+// ============================================
+
+enum ActionType {
+  USER_LOGIN
+  USER_LOGOUT
+  ORDER_CREATED
+  ORDER_COMPLETED
+  LISTING_CREATED
+  LISTING_UPDATED
+  LISTING_DELETED
+  CHAT_INITIATED
+  WITHDRAWAL_REQUESTED
+  CASHIN_REQUESTED
+  PAYMENT_SUBMITTED
+  ADMIN_ACTION
+}
+
+model AuditLog {
+  id           String     @id @default(cuid())
+  userId       String
+  actionType   ActionType
+  resourceId   String?    // Order ID, Listing ID, Chat ID, etc.
+  resourceType String?    // "order", "listing", "conversation", etc.
+  metadata     String?    // JSON string for additional context (no sensitive data)
+  ipAddress    String?
+  userAgent    String?
+  createdAt    DateTime   @default(now())
+
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([createdAt])
+  @@index([actionType])
+}
+
+// ============================================
+// SITE ANALYTICS
+// ============================================
+
+model SiteVisit {
+  id        String   @id @default(cuid())
+  visitorId String   // UUID from cookie
+  date      DateTime @db.Date  // Just the date (no time) for daily tracking
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  @@unique([visitorId, date])  // One entry per visitor per day
+  @@index([date])
+}
+
+// ============================================
+// BAN SYSTEM
+// ============================================
+
+model BlacklistedIdentifier {
+  id          String    @id @default(cuid())
+  type        String    // "IP" | "DEVICE_FINGERPRINT" | "USER_AGENT"
+  value       String    // The actual IP address or fingerprint hash
+  userId      String    // The banned user this came from
+  reason      String?   // Optional admin notes
+  createdAt   DateTime  @default(now())
+  expiresAt   DateTime? // null = permanent, matches user's bannedUntil
+
+  @@index([type, value])  // Fast lookup during auth
+  @@index([userId])
 }
