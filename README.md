@@ -4,19 +4,33 @@ A full-stack e-commerce marketplace built with Next.js, TypeScript, Prisma, and 
 
 ## Features
 
+### Core Features
 - 🔐 **Authentication** - Email/Password + Google OAuth
 - 🛒 **Listings Management** - Buy & sell items/services
 - 💳 **Payment Processing** - Receipt upload with admin approval
 - 📦 **Order Management** - Full order lifecycle tracking
 - 💰 **Wallet System** - Cash-in, withdrawals, and balance management
-- � **Cash-In Requests** - User deposits with admin approval workflow
+- 💵 **Cash-In Requests** - User deposits with admin approval workflow
 - 🔔 **Notification System** - Real-time notifications for all events
 - 💬 **Real-time Messaging** - Socket.IO powered chat with transaction context
 - 🔍 **Advanced Search** - Filter by game, price range, and listing type
 - 👤 **User Profiles** - Public seller profiles with reviews and listings
 - ⭐ **Review System** - Rate and review completed transactions
 - 🎫 **Support Center** - FAQ and help resources
-- 👨‍💼 **Admin Dashboard** - Manage orders, payments, cash-ins, and withdrawals
+
+### Admin & Moderation
+- 👨‍💼 **Admin Dashboard** - Comprehensive management panel
+- 🛡️ **Role-Based Access Control (RBAC)** - Super Admin, Admin, Moderator, and User roles
+- 🚫 **User Moderation** - Ban/unban users with IP and device fingerprint tracking
+- 📝 **Listing Moderation** - Hide/show listings, content policing
+- 📊 **Audit Logging** - Track all user actions for compliance
+- 📈 **Analytics Dashboard** - Site visits, user stats, and transaction metrics
+- ⚙️ **Platform Settings** - Configure transaction fees, social links, and support info
+
+### CMS (Content Management)
+- 🎮 **Game Management** - Add/edit/remove supported games
+- 🏷️ **Item Type Management** - Configure listing categories
+- 🔗 **Site Settings** - Social links (Discord, Twitter, Instagram) and contact info
 
 ## Tech Stack
 
@@ -279,13 +293,39 @@ The application includes a comprehensive notification system covering:
 - `GET /api/notifications` - Get user's notifications
 - `PATCH /api/notifications` - Mark notifications as read
 
-### Admin
+### Admin - Orders & Finance
 - `GET /api/admin/orders` - Get all orders
 - `PATCH /api/admin/orders` - Approve/reject orders
 - `GET /api/admin/withdrawals` - Get all withdrawals
 - `PATCH /api/admin/withdrawals` - Process withdrawals
 - `GET /api/admin/cashin` - Get pending cash-in requests
 - `PATCH /api/admin/cashin` - Approve/reject cash-in requests
+
+### Admin - User Management
+- `GET /api/admin/users` - List all users with filters
+- `PATCH /api/admin/users` - Ban/unban users, update roles
+- `GET /api/admin/users/[id]` - Get user details
+
+### Admin - Content Management
+- `GET/POST /api/admin/games` - Manage supported games
+- `PATCH/DELETE /api/admin/games/[id]` - Update/delete games
+- `GET/POST /api/admin/item-types` - Manage item categories
+- `PATCH/DELETE /api/admin/item-types/[id]` - Update/delete item types
+- `GET/PATCH /api/admin/listings/[id]` - Moderate listings (ban/unban)
+
+### Admin - Settings & Analytics
+- `GET/PATCH /api/admin/settings` - Platform fee configuration
+- `GET/PATCH /api/admin/site-settings` - Social links and contact info
+- `GET /api/admin/stats` - Dashboard analytics and metrics
+- `GET /api/admin/audit-logs` - User activity audit logs
+
+### Public Configuration
+- `GET /api/games` - Get active games list
+- `GET /api/item-types` - Get active item types
+- `GET /api/site-settings` - Get public site settings
+- `GET /api/platform-fee` - Get current platform fee
+- `GET /api/check-ban` - Check if user is banned
+- `POST /api/track-visit` - Track site visits
 
 ### Wallet
 - `GET /api/wallet/balance` - Get user wallet balance
