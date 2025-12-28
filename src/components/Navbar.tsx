@@ -33,6 +33,7 @@ export default function Navbar() {
     const [unreadCount, setUnreadCount] = useState(0);
     const [unreadMessageCount, setUnreadMessageCount] = useState(0); // For chat messages
     const [isLoadingNotifications, setIsLoadingNotifications] = useState(false);
+    const [expandedNotificationId, setExpandedNotificationId] = useState<string | null>(null);
 
     const handleSearch = (e: React.FormEvent) => {
         e.preventDefault();
@@ -424,45 +425,62 @@ export default function Navbar() {
                                                     </div>
                                                 ) : (
                                                     <div className="divide-y divide-white/10">
-                                                        {notifications.map((notification) => (
-                                                            <button
-                                                                key={notification.id}
-                                                                onClick={() => handleNotificationClick(notification)}
-                                                                className={`w-full text-left p-4 hover:bg-white/5 transition-colors ${!notification.isRead ? "bg-primary/10" : ""
-                                                                    }`}
-                                                            >
-                                                                <div className="flex items-start gap-3">
-                                                                    <div
-                                                                        className={`text-xl ${getNotificationColor(
-                                                                            notification.type
-                                                                        )}`}
-                                                                    >
-                                                                        {getNotificationIcon(notification.type)}
-                                                                    </div>
-                                                                    <div className="flex-1 min-w-0">
-                                                                        <div className="flex items-start justify-between gap-2">
-                                                                            <p
-                                                                                className={`text-sm font-medium ${!notification.isRead
-                                                                                    ? "text-white"
-                                                                                    : "text-zinc-300"
-                                                                                    }`}
-                                                                            >
-                                                                                {notification.title}
-                                                                            </p>
-                                                                            {!notification.isRead && (
-                                                                                <span className="w-2 h-2 bg-primary rounded-full flex-shrink-0 mt-1" />
-                                                                            )}
+                                                        {notifications.map((notification) => {
+                                                            const isExpanded = expandedNotificationId === notification.id;
+                                                            const messageLength = notification.message?.length || 0;
+                                                            const shouldTruncate = messageLength > 80;
+
+                                                            return (
+                                                                <div
+                                                                    key={notification.id}
+                                                                    className={`w-full text-left p-4 hover:bg-white/5 transition-colors ${!notification.isRead ? "bg-primary/10" : ""
+                                                                        }`}
+                                                                >
+                                                                    <div className="flex items-start gap-3">
+                                                                        <div
+                                                                            className={`text-xl ${getNotificationColor(
+                                                                                notification.type
+                                                                            )}`}
+                                                                        >
+                                                                            {getNotificationIcon(notification.type)}
                                                                         </div>
-                                                                        <p className="text-sm text-zinc-400 mt-1 line-clamp-2">
-                                                                            {notification.message}
-                                                                        </p>
-                                                                        <p className="text-xs text-zinc-500 mt-2">
-                                                                            {formatTimeAgo(notification.createdAt)}
-                                                                        </p>
+                                                                        <div className="flex-1 min-w-0">
+                                                                            <div className="flex items-start justify-between gap-2">
+                                                                                <button
+                                                                                    onClick={() => handleNotificationClick(notification)}
+                                                                                    className={`text-sm font-medium text-left hover:underline ${!notification.isRead
+                                                                                        ? "text-white"
+                                                                                        : "text-zinc-300"
+                                                                                        }`}
+                                                                                >
+                                                                                    {notification.title}
+                                                                                </button>
+                                                                                {!notification.isRead && (
+                                                                                    <span className="w-2 h-2 bg-primary rounded-full flex-shrink-0 mt-1" />
+                                                                                )}
+                                                                            </div>
+                                                                            <p className={`text-sm text-zinc-400 mt-1 ${!isExpanded && shouldTruncate ? "line-clamp-2" : ""}`}>
+                                                                                {notification.message}
+                                                                            </p>
+                                                                            {shouldTruncate && (
+                                                                                <button
+                                                                                    onClick={(e) => {
+                                                                                        e.stopPropagation();
+                                                                                        setExpandedNotificationId(isExpanded ? null : notification.id);
+                                                                                    }}
+                                                                                    className="text-xs text-primary hover:text-primary/80 mt-1 transition-colors"
+                                                                                >
+                                                                                    {isExpanded ? "See less" : "See more"}
+                                                                                </button>
+                                                                            )}
+                                                                            <p className="text-xs text-zinc-500 mt-2">
+                                                                                {formatTimeAgo(notification.createdAt)}
+                                                                            </p>
+                                                                        </div>
                                                                     </div>
                                                                 </div>
-                                                            </button>
-                                                        ))}
+                                                            );
+                                                        })}
                                                     </div>
                                                 )}
                                             </div>

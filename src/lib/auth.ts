@@ -4,6 +4,7 @@ import Credentials from "next-auth/providers/credentials";
 import { PrismaAdapter } from "@auth/prisma-adapter";
 import bcrypt from "bcryptjs";
 import prisma from "./db";
+import { logActivity } from "./auditLog";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
     adapter: PrismaAdapter(prisma),
@@ -41,6 +42,15 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
                     return null;
                 }
 
+                // Check if user is banned
+                if (user.bannedUntil && user.bannedUntil > new Date()) {
+                    const isPermanent = user.bannedUntil.getFullYear() >= 9999;
+                    console.warn(
+                        `Banned user attempted login: ${user.email} (${isPermanent ? "permanent" : `until ${user.bannedUntil.toISOString()}`})`
+                    );
+                    return null; // Deny login for banned users
+                }
+
                 return {
                     id: user.id,
                     email: user.email,
@@ -55,6 +65,21 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     },
     pages: {
         signIn: "/login",
+    },
+    events: {
+        // Log successful logins (note: request headers not available in events)
+        async signIn({ user }) {
+            if (user?.id) {
+                logActivity({
+                    userId: user.id,
+                    actionType: "USER_LOGIN",
+                    metadata: {
+                        email: user.email,
+                        provider: "credentials_or_oauth",
+                    },
+                });
+            }
+        },
     },
     callbacks: {
         async jwt({ token, user }) {
