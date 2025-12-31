@@ -52,6 +52,8 @@ model User {
   walletTransactions WalletTransaction[]
   cashInRequests CashInRequest[]
   auditLogs     AuditLog[]
+  disputesOpened   Dispute[] @relation("DisputesOpened")
+  disputesResolved Dispute[] @relation("DisputesResolved")
 }
 
 
@@ -135,7 +137,8 @@ model Listing {
   originalPrice Float?      // Original price before any reduction
   type          ListingType
   game          String
-  imageUrl      String?
+  imageUrl      String?       // Legacy single image (for backward compatibility)
+  images        String[]      // Array of image URLs (Cloudinary)
   sellerId      String
   isBanned      Boolean     @default(false)  // Admin can hide/takedown listings
   createdAt     DateTime    @default(now())
@@ -166,6 +169,7 @@ model Order {
   listing   Listing     @relation(fields: [listingId], references: [id], onDelete: Cascade)
   review    Review?
   conversations Conversation[]
+  dispute   Dispute?
 }
 
 model Conversation {
@@ -234,6 +238,7 @@ enum OrderStatus {
   COMPLETED           // Admin verified delivery, buyer can review
   CANCELLED
   REFUNDED
+  DISPUTED            // Order is under dispute - funds frozen
 }
 
 model Withdrawal {
@@ -303,6 +308,15 @@ enum NotificationType {
   // System notifications
   SYSTEM                // General system notification
   FEE_UPDATED           // Platform fee has been updated
+
+  // Dispute notifications
+  DISPUTE_OPENED        // Seller receives when buyer opens dispute
+  DISPUTE_RESOLVED      // Both parties receive when admin resolves
+  DISPUTE_UPDATE        // Status update notifications
+
+  // Transaction flow notifications
+  SALE_COMPLETED        // Seller receives when buyer confirms delivery
+  REVIEW_REMINDER       // Buyer receives prompt to leave review
 }
 
 // ============================================
@@ -368,6 +382,8 @@ enum ActionType {
   CASHIN_REQUESTED
   PAYMENT_SUBMITTED
   ADMIN_ACTION
+  DISPUTE_OPENED
+  DISPUTE_RESOLVED
 }
 
 model AuditLog {
@@ -419,4 +435,52 @@ model BlacklistedIdentifier {
 
   @@index([type, value])  // Fast lookup during auth
   @@index([userId])
+}
+
+// ============================================
+// DISPUTE RESOLUTION SYSTEM
+// ============================================
+
+enum DisputeStatus {
+  OPEN          // Dispute filed, awaiting admin review
+  UNDER_REVIEW  // Admin is actively investigating
+  RESOLVED      // Resolution applied
+  CLOSED        // Dispute closed without action
+}
+
+enum DisputeReason {
+  ITEM_NOT_RECEIVED
+  ITEM_NOT_AS_DESCRIBED
+  SELLER_UNRESPONSIVE
+  FRAUD_SUSPECTED
+  OTHER
+}
+
+enum DisputeResolution {
+  REFUND_BUYER
+  RELEASE_TO_SELLER
+  PARTIAL_REFUND
+  NO_ACTION
+}
+
+model Dispute {
+  id             String            @id @default(cuid())
+  orderId        String            @unique  // One active dispute per order
+  openedById     String            // User who opened the dispute
+  reason         DisputeReason
+  description    String            // Buyer's explanation
+  status         DisputeStatus     @default(OPEN)
+  resolution     DisputeResolution?
+  resolvedById   String?           // Admin who resolved
+  resolvedAt     DateTime?
+  adminNotes     String?           // Internal notes
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  order          Order             @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  openedBy       User              @relation("DisputesOpened", fields: [openedById], references: [id], onDelete: Cascade)
+  resolvedBy     User?             @relation("DisputesResolved", fields: [resolvedById], references: [id], onDelete: Cascade)
+
+  @@index([status])
+  @@index([createdAt])
 }

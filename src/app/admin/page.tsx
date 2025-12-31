@@ -10,6 +10,7 @@ import AdminSettings from "@/components/AdminSettings";
 import AuditLogTable from "@/components/AuditLogTable";
 import AnalyticsWidget from "@/components/AnalyticsWidget";
 import UserManagement from "@/components/UserManagement";
+import AdminDisputes from "@/components/AdminDisputes";
 
 interface AdminOrder {
     id: string;
@@ -79,6 +80,7 @@ const STATUS_STYLES: Record<string, string> = {
     REFUNDED: "bg-orange-500/20 text-orange-400",
     PROCESSING: "bg-blue-500/20 text-blue-400",
     REJECTED: "bg-red-500/20 text-red-400",
+    DISPUTED: "bg-orange-500/20 text-orange-400",
 };
 
 export default function AdminDashboard() {
@@ -92,6 +94,7 @@ export default function AdminDashboard() {
     const [processingId, setProcessingId] = useState<string | null>(null);
     const [filter, setFilter] = useState<string>("all");
     const [currentUserRole, setCurrentUserRole] = useState<Role>("ADMIN");
+    const [platformFee, setPlatformFee] = useState<number>(5);
 
     useEffect(() => {
         if (session) {
@@ -99,6 +102,7 @@ export default function AdminDashboard() {
             fetchWithdrawals();
             fetchCashInRequests();
             fetchCurrentUserRole();
+            fetchPlatformFee();
         }
     }, [session]);
 
@@ -153,6 +157,20 @@ export default function AdminDashboard() {
             }
         } catch (error) {
             console.error("Error fetching cash in requests:", error);
+        }
+    };
+
+    const fetchPlatformFee = async () => {
+        try {
+            const res = await fetch("/api/admin/settings");
+            if (res.ok) {
+                const data = await res.json();
+                if (data.transactionFeePercent !== undefined) {
+                    setPlatformFee(data.transactionFeePercent);
+                }
+            }
+        } catch (error) {
+            console.error("Error fetching platform fee:", error);
         }
     };
 
@@ -260,7 +278,7 @@ export default function AdminDashboard() {
                             <p className="text-zinc-400">Manage payments, orders, and withdrawals</p>
                         </div>
                         <div className="flex gap-2 flex-wrap">
-                            {["all", "payments", "delivery", "withdrawals", "cashin", "moderation", "activity", "completed", "settings"].map((f) => (
+                            {["all", "payments", "delivery", "disputes", "withdrawals", "cashin", "moderation", "activity", "completed", "settings"].map((f) => (
                                 <button
                                     key={f}
                                     onClick={() => setFilter(f)}
@@ -269,7 +287,7 @@ export default function AdminDashboard() {
                                         : "bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
                                         }`}
                                 >
-                                    {f === "payments" ? "Payments" : f === "delivery" ? "Delivery" : f === "cashin" ? "Cash In" : f === "moderation" ? "🛡️ Moderation" : f === "activity" ? "📋 Activity" : f === "settings" ? "⚙️ Settings" : f.charAt(0).toUpperCase() + f.slice(1)}
+                                    {f === "payments" ? "Payments" : f === "delivery" ? "Delivery" : f === "disputes" ? "⚠️ Disputes" : f === "cashin" ? "Cash In" : f === "moderation" ? "🛡️ Moderation" : f === "activity" ? "📋 Activity" : f === "settings" ? "⚙️ Settings" : f.charAt(0).toUpperCase() + f.slice(1)}
                                 </button>
                             ))}
                         </div>
@@ -309,6 +327,16 @@ export default function AdminDashboard() {
                                 {cashInRequests.filter(r => r.status === "PENDING").length}
                             </div>
                             <div className="text-sm text-zinc-400">Pending Cash In</div>
+                        </div>
+                        <div className="glass rounded-xl p-4 text-center border border-primary/30">
+                            <div className="text-2xl font-bold gradient-text">
+                                ₱{orders
+                                    .filter((o) => o.status === "COMPLETED")
+                                    .reduce((sum, o) => sum + (o.listing.price * platformFee / 100), 0)
+                                    .toFixed(2)
+                                }
+                            </div>
+                            <div className="text-sm text-zinc-400">Platform Income</div>
                         </div>
                     </div>
 
@@ -385,6 +413,8 @@ export default function AdminDashboard() {
                         </div>
                     ) : filter === "settings" ? (
                         <AdminSettings />
+                    ) : filter === "disputes" ? (
+                        <AdminDisputes />
                     ) : filter === "moderation" ? (
                         <UserManagement currentUserRole={currentUserRole} />
                     ) : filter === "activity" ? (
