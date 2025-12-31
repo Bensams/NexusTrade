@@ -7,8 +7,10 @@ A full-stack e-commerce marketplace built with Next.js, TypeScript, Prisma, and 
 ### Core Features
 - 🔐 **Authentication** - Email/Password + Google OAuth
 - 🛒 **Listings Management** - Buy & sell items/services
-- 💳 **Payment Processing** - Receipt upload with admin approval
+- �️ **Cloudinary Image Upload** - Drag-and-drop image upload with cloud storage
+- �💳 **Payment Processing** - Receipt upload with admin approval
 - 📦 **Order Management** - Full order lifecycle tracking
+- ✅ **Buyer Delivery Confirmation** - Buyers can confirm receipt to complete orders
 - 💰 **Wallet System** - Cash-in, withdrawals, and balance management
 - 💵 **Cash-In Requests** - User deposits with admin approval workflow
 - 🔔 **Notification System** - Real-time notifications for all events
@@ -16,6 +18,7 @@ A full-stack e-commerce marketplace built with Next.js, TypeScript, Prisma, and 
 - 🔍 **Advanced Search** - Filter by game, price range, and listing type
 - 👤 **User Profiles** - Public seller profiles with reviews and listings
 - ⭐ **Review System** - Rate and review completed transactions
+- ⚖️ **Dispute Resolution** - Buyers can open disputes for problematic orders
 - 🎫 **Support Center** - FAQ and help resources
 
 ### Admin & Moderation
@@ -23,6 +26,8 @@ A full-stack e-commerce marketplace built with Next.js, TypeScript, Prisma, and 
 - 🛡️ **Role-Based Access Control (RBAC)** - Super Admin, Admin, Moderator, and User roles
 - 🚫 **User Moderation** - Ban/unban users with IP and device fingerprint tracking
 - 📝 **Listing Moderation** - Hide/show listings, content policing
+- ⚖️ **Dispute Management** - Review and resolve buyer disputes
+- 💵 **Income Tracking** - View platform fee earnings
 - 📊 **Audit Logging** - Track all user actions for compliance
 - 📈 **Analytics Dashboard** - Site visits, user stats, and transaction metrics
 - ⚙️ **Platform Settings** - Configure transaction fees, social links, and support info
@@ -248,6 +253,9 @@ NexusTrade/
 | `NEXTAUTH_SECRET` | Secret key for JWT signing | Yes |
 | `GOOGLE_CLIENT_ID` | Google OAuth client ID | No |
 | `GOOGLE_CLIENT_SECRET` | Google OAuth client secret | No |
+| `CLOUDINARY_CLOUD_NAME` | Cloudinary cloud name for image uploads | No |
+| `CLOUDINARY_API_KEY` | Cloudinary API key | No |
+| `CLOUDINARY_API_SECRET` | Cloudinary API secret | No |
 | `NODE_ENV` | Environment (development/production) | Yes |
 
 ## Notification System
@@ -284,10 +292,16 @@ The application includes a comprehensive notification system covering:
 - `GET /api/orders` - Get user's orders (buyer)
 - `POST /api/orders` - Create order
 - `GET /api/orders/seller` - Get seller's orders
+- `POST /api/orders/[id]/confirm` - Buyer confirms delivery receipt
+
+### Disputes
+- `GET /api/disputes` - Get user's disputes
+- `POST /api/disputes` - Open a new dispute
 
 ### Payments
 - `POST /api/payments/upload` - Upload payment receipt
 - `POST /api/payments/delivery` - Upload delivery proof
+- `GET /api/sign-cloudinary-params` - Get signed params for Cloudinary upload
 
 ### Notifications
 - `GET /api/notifications` - Get user's notifications
@@ -318,6 +332,10 @@ The application includes a comprehensive notification system covering:
 - `GET/PATCH /api/admin/site-settings` - Social links and contact info
 - `GET /api/admin/stats` - Dashboard analytics and metrics
 - `GET /api/admin/audit-logs` - User activity audit logs
+
+### Admin - Disputes
+- `GET /api/admin/disputes` - Get all disputes
+- `PATCH /api/admin/disputes` - Resolve disputes (refund/reject)
 
 ### Public Configuration
 - `GET /api/games` - Get active games list
