@@ -303,7 +303,7 @@ export default function SellerOrdersPage() {
                                                 </button>
                                             )}
                                             {order.status === "DELIVERY_SUBMITTED" && (
-                                                <span className="text-sm text-purple-400">Awaiting admin verification</span>
+                                                <span className="text-sm text-purple-400">Awaiting buyer confirmation</span>
                                             )}
                                             {order.status === "COMPLETED" && (
                                                 <span className="text-sm text-green-400">✓ Completed</span>

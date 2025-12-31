@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import prisma from "@/lib/db";
+import { deleteCloudinaryImage } from "@/lib/cloudinary";
 
 // GET current user profile with stats
 export async function GET() {
@@ -92,7 +93,7 @@ export async function PATCH(request: Request) {
         }
 
         const body = await request.json();
-        const { name, bio } = body;
+        const { name, bio, image } = body;
 
         if (!name || name.trim().length === 0) {
             return NextResponse.json(
@@ -101,11 +102,26 @@ export async function PATCH(request: Request) {
             );
         }
 
+        // Get current user to check for existing image
+        const currentUser = await prisma.user.findUnique({
+            where: { id: session.user.id },
+            select: { image: true },
+        });
+
+        // Delete old image from Cloudinary if it's being replaced
+        if (currentUser?.image && image && currentUser.image !== image) {
+            // Delete asynchronously (don't block the response)
+            deleteCloudinaryImage(currentUser.image).catch(err =>
+                console.error("Failed to delete old profile image:", err)
+            );
+        }
+
         const user = await prisma.user.update({
             where: { id: session.user.id },
             data: {
                 name: name.trim(),
                 bio: bio?.trim() || null,
+                image: image || null,
             },
             select: {
                 id: true,

@@ -5,6 +5,7 @@ import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Navbar from "@/components/Navbar";
+import ImageUpload from "@/components/ImageUpload";
 
 interface Game {
     id: string;
@@ -37,7 +38,7 @@ export default function CreateListingPage() {
         price: "",
         type: "",
         game: "",
-        imageUrl: "",
+        images: [] as string[],
     });
 
     // Fetch games, item types, and platform fee on mount
@@ -317,19 +318,16 @@ export default function CreateListingPage() {
                                 </select>
                             </div>
 
-                            {/* Image URL */}
+                            {/* Listing Images */}
                             <div>
-                                <label htmlFor="imageUrl" className="block text-sm font-medium text-zinc-300 mb-2">
-                                    Image URL (optional)
+                                <label className="block text-sm font-medium text-zinc-300 mb-2">
+                                    Listing Images (up to 3)
                                 </label>
-                                <input
-                                    id="imageUrl"
-                                    name="imageUrl"
-                                    type="url"
-                                    value={formData.imageUrl}
-                                    onChange={handleChange}
-                                    placeholder="https://example.com/image.jpg"
-                                    className="w-full px-4 py-3 rounded-xl bg-zinc-900/80 border border-white/10 text-white placeholder-zinc-500 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition-all"
+                                <ImageUpload
+                                    mode="multiple"
+                                    folder="nexustrade/listings"
+                                    onUploadComplete={(urls) => setFormData(prev => ({ ...prev, images: urls as string[] }))}
+                                    buttonLabel="Upload Listing Images"
                                 />
                             </div>
 

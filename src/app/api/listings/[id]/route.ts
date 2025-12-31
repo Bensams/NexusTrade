@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import prisma from "@/lib/db";
+import { deleteCloudinaryImages } from "@/lib/cloudinary";
 
 // GET single listing
 export async function GET(
@@ -67,7 +68,7 @@ export async function GET(
     }
 }
 
-// DELETE a listing (already exists, adding GET)
+// DELETE a listing
 export async function DELETE(
     request: Request,
     { params }: { params: Promise<{ id: string }> }
@@ -101,9 +102,22 @@ export async function DELETE(
             );
         }
 
+        // Delete listing from database first
         await prisma.listing.delete({
             where: { id },
         });
+
+        // Delete all listing images from Cloudinary asynchronously
+        const imagesToDelete = [...(listing.images || [])];
+        if (listing.imageUrl && !imagesToDelete.includes(listing.imageUrl)) {
+            imagesToDelete.push(listing.imageUrl);
+        }
+
+        if (imagesToDelete.length > 0) {
+            deleteCloudinaryImages(imagesToDelete).catch(err =>
+                console.error("Failed to delete listing images from Cloudinary:", err)
+            );
+        }
 
         return NextResponse.json({ success: true });
     } catch (error) {
@@ -150,7 +164,7 @@ export async function PATCH(
         }
 
         const body = await request.json();
-        const { title, description, price, type, game, imageUrl } = body;
+        const { title, description, price, type, game, images } = body;
 
         // Handle price reduction - store original price
         let updateData: Record<string, unknown> = {};
@@ -159,7 +173,25 @@ export async function PATCH(
         if (description) updateData.description = description;
         if (type) updateData.type = type;
         if (game) updateData.game = game;
-        if (imageUrl !== undefined) updateData.imageUrl = imageUrl || null;
+
+        // Handle image updates with cleanup
+        if (images !== undefined) {
+            const newImages: string[] = images || [];
+            const oldImages: string[] = listing.images || [];
+
+            // Find images that were removed
+            const removedImages = oldImages.filter(url => !newImages.includes(url));
+
+            // Delete removed images from Cloudinary asynchronously
+            if (removedImages.length > 0) {
+                deleteCloudinaryImages(removedImages).catch(err =>
+                    console.error("Failed to delete removed listing images:", err)
+                );
+            }
+
+            updateData.images = newImages;
+            updateData.imageUrl = newImages[0] || null; // Keep first image as primary
+        }
 
         if (price !== undefined) {
             const newPrice = parseFloat(price);

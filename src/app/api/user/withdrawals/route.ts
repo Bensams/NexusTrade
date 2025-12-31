@@ -107,6 +107,22 @@ export async function POST(request: Request) {
             _sum: { amount: true },
         });
 
+        // Check for active disputes on seller's orders
+        const activeDisputes = await prisma.dispute.count({
+            where: {
+                order: {
+                    listing: { sellerId: session.user.id },
+                },
+                status: { in: ["OPEN", "UNDER_REVIEW"] },
+            },
+        });
+
+        if (activeDisputes > 0) {
+            return NextResponse.json({
+                error: "Cannot withdraw while disputes are active. Please wait for dispute resolution."
+            }, { status: 400 });
+        }
+
         const availableBalance = user.balance - (pendingAmount._sum.amount || 0);
 
         if (amount > availableBalance) {

@@ -45,6 +45,8 @@ export async function GET() {
                         id: true,
                         status: true,
                         deliveryProof: true,
+                        buyerId: true,
+                        completedAt: true,
                     },
                 },
             },

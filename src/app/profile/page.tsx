@@ -6,6 +6,7 @@ import Image from "next/image";
 import Link from "next/link";
 import Navbar from "@/components/Navbar";
 import { PageSkeleton } from "@/components/Skeleton";
+import ImageUpload from "@/components/ImageUpload";
 
 interface UserProfile {
     id: string;
@@ -33,6 +34,7 @@ export default function ProfilePage() {
     const [isEditing, setIsEditing] = useState(false);
     const [editName, setEditName] = useState("");
     const [editBio, setEditBio] = useState("");
+    const [editImage, setEditImage] = useState("");
     const [isSaving, setIsSaving] = useState(false);
     const [error, setError] = useState("");
 
@@ -50,6 +52,7 @@ export default function ProfilePage() {
                 setProfile(data);
                 setEditName(data.name || "");
                 setEditBio(data.bio || "");
+                setEditImage(data.image || "");
             }
         } catch (error) {
             console.error("Error fetching profile:", error);
@@ -71,12 +74,12 @@ export default function ProfilePage() {
             const res = await fetch("/api/user/profile", {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ name: editName, bio: editBio }),
+                body: JSON.stringify({ name: editName, bio: editBio, image: editImage }),
             });
 
             if (res.ok) {
                 const updated = await res.json();
-                setProfile((prev) => prev ? { ...prev, name: updated.name, bio: updated.bio } : null);
+                setProfile((prev) => prev ? { ...prev, name: updated.name, bio: updated.bio, image: updated.image } : null);
                 setIsEditing(false);
                 // Update session with new name
                 await update({ name: updated.name });
@@ -149,6 +152,17 @@ export default function ProfilePage() {
                             <div className="flex-1 text-center sm:text-left">
                                 {isEditing ? (
                                     <div className="space-y-3">
+                                        {/* Profile Picture Upload */}
+                                        <div>
+                                            <label className="block text-sm text-zinc-400 mb-2">Profile Picture</label>
+                                            <ImageUpload
+                                                mode="single"
+                                                folder="nexustrade/profiles"
+                                                existingImages={editImage ? [editImage] : []}
+                                                onUploadComplete={(url) => setEditImage(url as string)}
+                                                buttonLabel="Change Profile Picture"
+                                            />
+                                        </div>
                                         <div>
                                             <label className="block text-sm text-zinc-400 mb-1">Display Name</label>
                                             <input
@@ -185,6 +199,7 @@ export default function ProfilePage() {
                                                     setIsEditing(false);
                                                     setEditName(profile.name || "");
                                                     setEditBio(profile.bio || "");
+                                                    setEditImage(profile.image || "");
                                                     setError("");
                                                 }}
                                                 className="px-4 py-2 text-sm font-medium text-zinc-300 border border-white/10 rounded-lg hover:bg-white/5"

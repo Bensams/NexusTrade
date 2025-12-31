@@ -33,6 +33,8 @@ interface ConversationContext {
         id: string;
         status: string;
         deliveryProof: string | null;
+        buyerId: string;
+        completedAt?: string | null;
     } | null;
 }
 
@@ -59,6 +61,8 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     const [context, setContext] = useState<ConversationContext>({});
     const [isUploading, setIsUploading] = useState(false);
     const [showProofModal, setShowProofModal] = useState(false);
+    const [isConfirming, setIsConfirming] = useState(false);
+    const [showReviewModal, setShowReviewModal] = useState(false);
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -208,8 +212,35 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
 
     // Check if current user is the seller
     const isSeller = session?.user?.id === context.listing?.sellerId;
+    const isBuyer = session?.user?.id === context.order?.buyerId;
     const canUploadProof = isSeller && context.order?.status === "PAID";
+    const canConfirmDelivery = isBuyer && context.order?.status === "DELIVERY_SUBMITTED";
     const hasProof = !!context.order?.deliveryProof;
+
+    // Handle buyer confirming delivery
+    const handleConfirmDelivery = async () => {
+        if (!context.order?.id) return;
+        setIsConfirming(true);
+        try {
+            const res = await fetch(`/api/orders/${context.order.id}/confirm`, {
+                method: "POST",
+            });
+            if (res.ok) {
+                const data = await res.json();
+                if (data.promptReview) {
+                    setShowReviewModal(true);
+                }
+                fetchConversationInfo();
+            } else {
+                const err = await res.json();
+                alert(err.error || "Failed to confirm delivery");
+            }
+        } catch (error) {
+            console.error("Error confirming:", error);
+        } finally {
+            setIsConfirming(false);
+        }
+    };
 
     if (status === "loading" || isLoading) {
         return (
@@ -233,7 +264,14 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                 <div className="sticky top-16 z-10">
                     {/* Transaction Context Card */}
                     {context.listing && (
-                        <TransactionCard listing={context.listing} order={context.order} />
+                        <TransactionCard
+                            listing={context.listing}
+                            order={context.order ? {
+                                ...context.order,
+                                buyerId: context.order.buyerId,
+                            } : undefined}
+                            currentUserId={session?.user?.id}
+                        />
                     )}
 
                     {/* Chat Header */}
@@ -270,28 +308,51 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                 </div>
 
                 {/* Delivery Proof Section */}
-                {context.order && (canUploadProof || hasProof) && (
+                {context.order && (canUploadProof || hasProof || canConfirmDelivery) && (
                     <div className="glass border-b border-white/10 p-4">
                         {hasProof ? (
-                            <div className="flex items-center gap-3">
-                                <div className="flex-1">
-                                    <p className="text-sm font-medium text-green-400">
-                                        ✓ Delivery Proof Submitted
-                                    </p>
-                                    <p className="text-xs text-zinc-400">
-                                        {context.order.status === "DELIVERY_SUBMITTED"
-                                            ? "Waiting for admin verification"
-                                            : context.order.status === "COMPLETED"
-                                                ? "Order completed!"
-                                                : "View proof below"}
-                                    </p>
+                            <div className="space-y-3">
+                                <div className="flex items-center gap-3">
+                                    <div className="flex-1">
+                                        <p className="text-sm font-medium text-green-400">
+                                            ✓ Delivery Proof Submitted
+                                        </p>
+                                        <p className="text-xs text-zinc-400">
+                                            {context.order.status === "DELIVERY_SUBMITTED"
+                                                ? isBuyer
+                                                    ? "Please confirm receipt to complete the order"
+                                                    : "Waiting for buyer confirmation"
+                                                : context.order.status === "COMPLETED"
+                                                    ? "Order completed!"
+                                                    : "View proof below"}
+                                        </p>
+                                    </div>
+                                    <button
+                                        onClick={() => setShowProofModal(true)}
+                                        className="px-3 py-1.5 text-sm bg-white/10 hover:bg-white/20 text-white rounded-lg transition-colors"
+                                    >
+                                        View Proof
+                                    </button>
                                 </div>
-                                <button
-                                    onClick={() => setShowProofModal(true)}
-                                    className="px-3 py-1.5 text-sm bg-white/10 hover:bg-white/20 text-white rounded-lg transition-colors"
-                                >
-                                    View Proof
-                                </button>
+
+                                {/* Buyer Confirmation Buttons */}
+                                {canConfirmDelivery && (
+                                    <div className="flex gap-2 pt-2 border-t border-white/10">
+                                        <button
+                                            onClick={handleConfirmDelivery}
+                                            disabled={isConfirming}
+                                            className="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-gradient-to-r from-green-500 to-emerald-500 hover:opacity-90 rounded-lg transition-all disabled:opacity-50"
+                                        >
+                                            {isConfirming ? "Confirming..." : "✓ Confirm Receipt"}
+                                        </button>
+                                        <button
+                                            onClick={() => {/* Handled by TransactionCard Report Issue */ }}
+                                            className="px-4 py-2.5 text-sm font-medium text-orange-400 border border-orange-400/30 hover:bg-orange-400/10 rounded-lg transition-colors"
+                                        >
+                                            Report Issue
+                                        </button>
+                                    </div>
+                                )}
                             </div>
                         ) : canUploadProof && (
                             <div className="flex items-center gap-3">
@@ -402,6 +463,39 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                         </button>
                     </div>
                 </form>
+
+                {/* Review Modal - After Confirmation */}
+                {showReviewModal && context.listing && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4">
+                        <div className="glass rounded-xl max-w-md w-full p-6 space-y-4">
+                            <div className="text-center">
+                                <div className="text-4xl mb-2">🎉</div>
+                                <h3 className="text-xl font-bold text-white">Order Complete!</h3>
+                                <p className="text-zinc-400 text-sm mt-1">
+                                    The seller has been paid. Would you like to leave a review?
+                                </p>
+                            </div>
+
+                            <div className="flex gap-3">
+                                <button
+                                    onClick={() => setShowReviewModal(false)}
+                                    className="flex-1 px-4 py-2.5 text-sm font-medium text-zinc-400 border border-zinc-600 rounded-lg hover:bg-zinc-800 transition-colors"
+                                >
+                                    Maybe Later
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        setShowReviewModal(false);
+                                        router.push("/orders");
+                                    }}
+                                    className="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-gradient-to-r from-primary to-accent rounded-lg hover:opacity-90 transition-all"
+                                >
+                                    Leave Review
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
         </div>
     );

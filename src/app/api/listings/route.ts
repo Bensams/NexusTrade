@@ -47,9 +47,9 @@ export async function POST(request: Request) {
         }
 
         const body = await request.json();
-        const { title, description, price, type, game, imageUrl } = body;
+        const { title, description, price, type: itemCategory, game, images } = body;
 
-        if (!title || !description || !price || !type || !game) {
+        if (!title || !description || !price || !itemCategory || !game) {
             return NextResponse.json(
                 { error: "Missing required fields" },
                 { status: 400 }
@@ -63,14 +63,17 @@ export async function POST(request: Request) {
         });
 
         // Create the listing
+        // Note: Prisma type field expects ListingType enum (ITEM or SERVICE)
+        // The form sends item category names (Accounts, Skins, etc.), so we default to ITEM
         const listing = await prisma.listing.create({
             data: {
                 title,
                 description,
                 price: parseFloat(price),
-                type,
-                game,
-                imageUrl: imageUrl || null,
+                type: "ITEM", // Default to ITEM type
+                game: `${game} - ${itemCategory}`, // Include category in game field
+                images: images || [],
+                imageUrl: images?.[0] || null,
                 sellerId: session.user.id,
             },
             include: {
